@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+
+# SQLite database files
+db/*.sqlite
+db/*.sqlite-journal
+db/*.sqlite-wal
+db/*.sqlite-shm
