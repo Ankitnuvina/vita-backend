@@ -9,7 +9,8 @@ function baseOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    // sameSite: isProd ? 'strict' : 'lax',
+    sameSite: isProd ? 'none' : 'lax',
     domain: config.cookieDomain,
     path: '/',
   }
