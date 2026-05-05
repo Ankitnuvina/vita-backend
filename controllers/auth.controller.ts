@@ -129,7 +129,7 @@ export const register: RequestHandler = async (req, res, next) => {
     if (handleZod(err, res)) return
     next(err)
   }
-}  
+}
 
 /**
  * Admin self-registration. Gated by ADMIN_INVITE_CODE so the URL alone is

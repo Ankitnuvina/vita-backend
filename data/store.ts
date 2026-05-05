@@ -1,5 +1,5 @@
-import { getDb } from '../db/adapter'
-import type { DbAdapter } from '../db/adapter'
+import type { Collection } from 'mongodb'
+import { Collections, getDb, nextId } from '../db/adapter'
 import type { UserRole } from '../types'
 import type {
   Article,
@@ -9,6 +9,11 @@ import type {
   WellnessTip,
 } from './seed'
 
+/* -------------------------------------------------------------------------- */
+/*  Public record types (unchanged from the SQL era — these are the API      */
+/*  contracts the controllers + frontend rely on)                            */
+/* -------------------------------------------------------------------------- */
+
 export interface UserRecord {
   userId: string
   username: string
@@ -17,154 +22,195 @@ export interface UserRecord {
   createdAt: string
 }
 
-interface ArticleRow {
-  id: number
+/* -------------------------------------------------------------------------- */
+/*  Internal MongoDB document shapes                                          */
+/*                                                                           */
+/*  Numeric resources (articles/podcasts/experts/tips) use the integer id   */
+/*  as `_id` directly, preserving the `id: number` API surface and giving   */
+/*  us the primary index for free.                                          */
+/* -------------------------------------------------------------------------- */
+
+interface ArticleDoc {
+  _id: number
   cat: string
-  category_label: string
-  category_color: string
+  categoryLabel: string
+  categoryColor: string
   title: string
   author: string
   date: string
-  read_time: string
-  image_url: string
+  readTime: string
+  imageUrl: string
   excerpt: string
-  is_premium: number | boolean
+  isPremium: boolean
   slug: string
+  createdAt: Date
 }
 
-interface PodcastRow {
-  id: number
+interface PodcastDoc {
+  _id: number
   episode: string
   category: string
   title: string
   guest: string
   duration: string
   date: string
-  image_url: string
+  imageUrl: string
+  createdAt: Date
 }
 
-interface ExpertRow {
-  id: number
+interface ExpertDoc {
+  _id: number
   name: string
   role: string
   credentials: string
-  article_count: number
-  image_url: string
+  articleCount: number
+  imageUrl: string
+  createdAt: Date
 }
 
-interface TipRow {
-  id: number
+interface TipDoc {
+  _id: number
   icon: string
-  color_bg: string
-  color_border: string
+  colors: { bg: string; border: string }
   title: string
   text: string
+  createdAt: Date
 }
 
-interface PlanRow {
-  id: string
+interface PlanDoc {
+  _id: string
   name: string
-  monthly_price: string
-  annual_price: string
+  monthlyPrice: string
+  annualPrice: string
   tagline: string
-  features: string
-  cta_label: string
-  is_popular: number | boolean
-  sort_order: number
+  features: string[]
+  ctaLabel: string
+  isPopular: boolean
+  sortOrder: number
 }
 
-interface UserRow {
-  user_id: string
+interface UserDoc {
+  /** Equals `userId` (e.g. "admin-1", "user-3"). */
+  _id: string
   username: string
+  /** Lower-cased copy used by the case-insensitive unique index. */
+  usernameLower: string
   role: UserRole
-  password_hash: string
-  created_at: string
+  passwordHash: string
+  createdAt: Date
 }
 
-function db(): DbAdapter {
-  return getDb()
+interface AppMetaDoc {
+  _id: string
+  value: string
 }
 
-function asBool(v: unknown): boolean {
-  return v === true || v === 1 || v === '1' || v === 't' || v === 'true'
+/* -------------------------------------------------------------------------- */
+/*  Collection accessors                                                      */
+/* -------------------------------------------------------------------------- */
+
+function articlesCol(): Collection<ArticleDoc> {
+  return getDb().collection<ArticleDoc>(Collections.articles)
+}
+function podcastsCol(): Collection<PodcastDoc> {
+  return getDb().collection<PodcastDoc>(Collections.podcasts)
+}
+function expertsCol(): Collection<ExpertDoc> {
+  return getDb().collection<ExpertDoc>(Collections.experts)
+}
+function tipsCol(): Collection<TipDoc> {
+  return getDb().collection<TipDoc>(Collections.tips)
+}
+function plansCol(): Collection<PlanDoc> {
+  return getDb().collection<PlanDoc>(Collections.plans)
+}
+function usersCol(): Collection<UserDoc> {
+  return getDb().collection<UserDoc>(Collections.users)
+}
+function appMetaCol(): Collection<AppMetaDoc> {
+  return getDb().collection<AppMetaDoc>(Collections.appMeta)
 }
 
-/** Encode a JS boolean for the active driver (BOOL on Postgres, 0/1 on SQLite). */
-function encBool(v: boolean): boolean | number {
-  return db().dialect === 'postgres' ? v : v ? 1 : 0
-}
+/* -------------------------------------------------------------------------- */
+/*  Document → API mappers (preserve every output field exactly)             */
+/* -------------------------------------------------------------------------- */
 
-function rowToArticle(r: ArticleRow): Article {
+function docToArticle(d: ArticleDoc): Article {
   return {
-    id: r.id,
-    cat: r.cat,
-    categoryLabel: r.category_label,
-    categoryColor: r.category_color,
-    title: r.title,
-    author: r.author,
-    date: r.date,
-    readTime: r.read_time,
-    imageUrl: r.image_url,
-    excerpt: r.excerpt,
-    isPremium: asBool(r.is_premium),
-    slug: r.slug,
+    id: d._id,
+    cat: d.cat,
+    categoryLabel: d.categoryLabel,
+    categoryColor: d.categoryColor,
+    title: d.title,
+    author: d.author,
+    date: d.date,
+    readTime: d.readTime,
+    imageUrl: d.imageUrl,
+    excerpt: d.excerpt,
+    isPremium: d.isPremium,
+    slug: d.slug,
   }
 }
 
-function rowToPodcast(r: PodcastRow): Podcast {
+function docToPodcast(d: PodcastDoc): Podcast {
   return {
-    id: r.id,
-    episode: r.episode,
-    category: r.category,
-    title: r.title,
-    guest: r.guest,
-    duration: r.duration,
-    date: r.date,
-    imageUrl: r.image_url,
+    id: d._id,
+    episode: d.episode,
+    category: d.category,
+    title: d.title,
+    guest: d.guest,
+    duration: d.duration,
+    date: d.date,
+    imageUrl: d.imageUrl,
   }
 }
 
-function rowToExpert(r: ExpertRow): Expert {
+function docToExpert(d: ExpertDoc): Expert {
   return {
-    id: r.id,
-    name: r.name,
-    role: r.role,
-    credentials: r.credentials,
-    articleCount: r.article_count,
-    imageUrl: r.image_url,
+    id: d._id,
+    name: d.name,
+    role: d.role,
+    credentials: d.credentials,
+    articleCount: d.articleCount,
+    imageUrl: d.imageUrl,
   }
 }
 
-function rowToTip(r: TipRow): WellnessTip {
+function docToTip(d: TipDoc): WellnessTip {
   return {
-    id: r.id,
-    icon: r.icon,
-    colors: { bg: r.color_bg, border: r.color_border },
-    title: r.title,
-    text: r.text,
+    id: d._id,
+    icon: d.icon,
+    colors: { bg: d.colors.bg, border: d.colors.border },
+    title: d.title,
+    text: d.text,
   }
 }
 
-function rowToPlan(r: PlanRow): SubscriptionPlan {
+function docToPlan(d: PlanDoc): SubscriptionPlan {
   return {
-    id: r.id,
-    name: r.name,
-    monthlyPrice: r.monthly_price,
-    annualPrice: r.annual_price,
-    tagline: r.tagline,
-    features: JSON.parse(r.features) as string[],
-    ctaLabel: r.cta_label,
-    isPopular: asBool(r.is_popular),
+    id: d._id,
+    name: d.name,
+    monthlyPrice: d.monthlyPrice,
+    annualPrice: d.annualPrice,
+    tagline: d.tagline,
+    features: d.features,
+    ctaLabel: d.ctaLabel,
+    isPopular: d.isPopular,
   }
 }
 
-function rowToUser(r: UserRow): UserRecord {
+function docToUser(d: UserDoc): UserRecord {
   return {
-    userId: r.user_id,
-    username: r.username,
-    role: r.role,
-    passwordHash: r.password_hash,
-    createdAt: r.created_at,
+    userId: d._id,
+    username: d.username,
+    role: d.role,
+    passwordHash: d.passwordHash,
+    /**
+     * Stringified to match the SQL contract (which returned ISO/timestamp
+     * strings, not Date objects). The frontend never inspects this — it's
+     * only used internally — but keeping the shape stable avoids surprises.
+     */
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
   }
 }
 
@@ -174,70 +220,61 @@ function rowToUser(r: UserRow): UserRecord {
 
 export const articleRepo = {
   async list(): Promise<Article[]> {
-    const rows = await db().query<ArticleRow>('SELECT * FROM articles ORDER BY id DESC')
-    return rows.map(rowToArticle)
+    const docs = await articlesCol().find({}).sort({ _id: -1 }).toArray()
+    return docs.map(docToArticle)
   },
   async byId(id: number): Promise<Article | undefined> {
-    const row = await db().get<ArticleRow>('SELECT * FROM articles WHERE id = ?', [id])
-    return row ? rowToArticle(row) : undefined
+    const doc = await articlesCol().findOne({ _id: id })
+    return doc ? docToArticle(doc) : undefined
   },
   async create(data: Omit<Article, 'id'>): Promise<Article> {
-    const row = await db().get<{ id: number }>(
-      `INSERT INTO articles
-         (cat, category_label, category_color, title, author, date, read_time, image_url, excerpt, is_premium, slug)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       RETURNING id`,
-      [
-        data.cat,
-        data.categoryLabel,
-        data.categoryColor,
-        data.title,
-        data.author,
-        data.date,
-        data.readTime,
-        data.imageUrl,
-        data.excerpt,
-        encBool(data.isPremium),
-        data.slug,
-      ]
-    )
-    return { id: Number(row?.id ?? 0), ...data }
+    const _id = await nextId('articles')
+    const doc: ArticleDoc = {
+      _id,
+      cat: data.cat,
+      categoryLabel: data.categoryLabel,
+      categoryColor: data.categoryColor,
+      title: data.title,
+      author: data.author,
+      date: data.date,
+      readTime: data.readTime,
+      imageUrl: data.imageUrl,
+      excerpt: data.excerpt,
+      isPremium: data.isPremium,
+      slug: data.slug,
+      createdAt: new Date(),
+    }
+    await articlesCol().insertOne(doc)
+    return docToArticle(doc)
   },
   async update(id: number, data: Partial<Omit<Article, 'id'>>): Promise<Article | undefined> {
-    const map: Record<string, string> = {
-      cat: 'cat',
-      categoryLabel: 'category_label',
-      categoryColor: 'category_color',
-      title: 'title',
-      author: 'author',
-      date: 'date',
-      readTime: 'read_time',
-      imageUrl: 'image_url',
-      excerpt: 'excerpt',
-      isPremium: 'is_premium',
-      slug: 'slug',
-    }
-    const sets: string[] = []
-    const values: unknown[] = []
-    for (const [key, value] of Object.entries(data)) {
-      const col = map[key]
-      if (!col) continue
-      sets.push(`${col} = ?`)
-      values.push(key === 'isPremium' ? encBool(value as boolean) : value)
-    }
-    if (sets.length === 0) return this.byId(id)
-    values.push(id)
-    const result = await db().run(`UPDATE articles SET ${sets.join(', ')} WHERE id = ?`, values)
-    if (result.changes === 0) return undefined
-    return this.byId(id)
+    const set: Partial<ArticleDoc> = {}
+    if (data.cat !== undefined) set.cat = data.cat
+    if (data.categoryLabel !== undefined) set.categoryLabel = data.categoryLabel
+    if (data.categoryColor !== undefined) set.categoryColor = data.categoryColor
+    if (data.title !== undefined) set.title = data.title
+    if (data.author !== undefined) set.author = data.author
+    if (data.date !== undefined) set.date = data.date
+    if (data.readTime !== undefined) set.readTime = data.readTime
+    if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
+    if (data.excerpt !== undefined) set.excerpt = data.excerpt
+    if (data.isPremium !== undefined) set.isPremium = data.isPremium
+    if (data.slug !== undefined) set.slug = data.slug
+
+    if (Object.keys(set).length === 0) return this.byId(id)
+    const doc = await articlesCol().findOneAndUpdate(
+      { _id: id },
+      { $set: set },
+      { returnDocument: 'after' }
+    )
+    return doc ? docToArticle(doc) : undefined
   },
   async remove(id: number): Promise<boolean> {
-    const result = await db().run('DELETE FROM articles WHERE id = ?', [id])
-    return result.changes > 0
+    const result = await articlesCol().deleteOne({ _id: id })
+    return result.deletedCount > 0
   },
   async count(): Promise<number> {
-    const row = await db().get<{ c: number | string }>('SELECT COUNT(*) AS c FROM articles')
-    return Number(row?.c ?? 0)
+    return articlesCol().countDocuments({})
   },
 }
 
@@ -247,53 +284,53 @@ export const articleRepo = {
 
 export const podcastRepo = {
   async list(): Promise<Podcast[]> {
-    const rows = await db().query<PodcastRow>('SELECT * FROM podcasts ORDER BY id DESC')
-    return rows.map(rowToPodcast)
+    const docs = await podcastsCol().find({}).sort({ _id: -1 }).toArray()
+    return docs.map(docToPodcast)
   },
   async byId(id: number): Promise<Podcast | undefined> {
-    const row = await db().get<PodcastRow>('SELECT * FROM podcasts WHERE id = ?', [id])
-    return row ? rowToPodcast(row) : undefined
+    const doc = await podcastsCol().findOne({ _id: id })
+    return doc ? docToPodcast(doc) : undefined
   },
   async create(data: Omit<Podcast, 'id'>): Promise<Podcast> {
-    const row = await db().get<{ id: number }>(
-      `INSERT INTO podcasts (episode, category, title, guest, duration, date, image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       RETURNING id`,
-      [data.episode, data.category, data.title, data.guest, data.duration, data.date, data.imageUrl]
-    )
-    return { id: Number(row?.id ?? 0), ...data }
+    const _id = await nextId('podcasts')
+    const doc: PodcastDoc = {
+      _id,
+      episode: data.episode,
+      category: data.category,
+      title: data.title,
+      guest: data.guest,
+      duration: data.duration,
+      date: data.date,
+      imageUrl: data.imageUrl,
+      createdAt: new Date(),
+    }
+    await podcastsCol().insertOne(doc)
+    return docToPodcast(doc)
   },
   async update(id: number, data: Partial<Omit<Podcast, 'id'>>): Promise<Podcast | undefined> {
-    const map: Record<string, string> = {
-      episode: 'episode',
-      category: 'category',
-      title: 'title',
-      guest: 'guest',
-      duration: 'duration',
-      date: 'date',
-      imageUrl: 'image_url',
-    }
-    const sets: string[] = []
-    const values: unknown[] = []
-    for (const [key, value] of Object.entries(data)) {
-      const col = map[key]
-      if (!col) continue
-      sets.push(`${col} = ?`)
-      values.push(value)
-    }
-    if (sets.length === 0) return this.byId(id)
-    values.push(id)
-    const result = await db().run(`UPDATE podcasts SET ${sets.join(', ')} WHERE id = ?`, values)
-    if (result.changes === 0) return undefined
-    return this.byId(id)
+    const set: Partial<PodcastDoc> = {}
+    if (data.episode !== undefined) set.episode = data.episode
+    if (data.category !== undefined) set.category = data.category
+    if (data.title !== undefined) set.title = data.title
+    if (data.guest !== undefined) set.guest = data.guest
+    if (data.duration !== undefined) set.duration = data.duration
+    if (data.date !== undefined) set.date = data.date
+    if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
+
+    if (Object.keys(set).length === 0) return this.byId(id)
+    const doc = await podcastsCol().findOneAndUpdate(
+      { _id: id },
+      { $set: set },
+      { returnDocument: 'after' }
+    )
+    return doc ? docToPodcast(doc) : undefined
   },
   async remove(id: number): Promise<boolean> {
-    const result = await db().run('DELETE FROM podcasts WHERE id = ?', [id])
-    return result.changes > 0
+    const result = await podcastsCol().deleteOne({ _id: id })
+    return result.deletedCount > 0
   },
   async count(): Promise<number> {
-    const row = await db().get<{ c: number | string }>('SELECT COUNT(*) AS c FROM podcasts')
-    return Number(row?.c ?? 0)
+    return podcastsCol().countDocuments({})
   },
 }
 
@@ -303,51 +340,49 @@ export const podcastRepo = {
 
 export const expertRepo = {
   async list(): Promise<Expert[]> {
-    const rows = await db().query<ExpertRow>('SELECT * FROM experts ORDER BY id DESC')
-    return rows.map(rowToExpert)
+    const docs = await expertsCol().find({}).sort({ _id: -1 }).toArray()
+    return docs.map(docToExpert)
   },
   async byId(id: number): Promise<Expert | undefined> {
-    const row = await db().get<ExpertRow>('SELECT * FROM experts WHERE id = ?', [id])
-    return row ? rowToExpert(row) : undefined
+    const doc = await expertsCol().findOne({ _id: id })
+    return doc ? docToExpert(doc) : undefined
   },
   async create(data: Omit<Expert, 'id'>): Promise<Expert> {
-    const row = await db().get<{ id: number }>(
-      `INSERT INTO experts (name, role, credentials, article_count, image_url)
-       VALUES (?, ?, ?, ?, ?)
-       RETURNING id`,
-      [data.name, data.role, data.credentials, data.articleCount, data.imageUrl]
-    )
-    return { id: Number(row?.id ?? 0), ...data }
+    const _id = await nextId('experts')
+    const doc: ExpertDoc = {
+      _id,
+      name: data.name,
+      role: data.role,
+      credentials: data.credentials,
+      articleCount: data.articleCount,
+      imageUrl: data.imageUrl,
+      createdAt: new Date(),
+    }
+    await expertsCol().insertOne(doc)
+    return docToExpert(doc)
   },
   async update(id: number, data: Partial<Omit<Expert, 'id'>>): Promise<Expert | undefined> {
-    const map: Record<string, string> = {
-      name: 'name',
-      role: 'role',
-      credentials: 'credentials',
-      articleCount: 'article_count',
-      imageUrl: 'image_url',
-    }
-    const sets: string[] = []
-    const values: unknown[] = []
-    for (const [key, value] of Object.entries(data)) {
-      const col = map[key]
-      if (!col) continue
-      sets.push(`${col} = ?`)
-      values.push(value)
-    }
-    if (sets.length === 0) return this.byId(id)
-    values.push(id)
-    const result = await db().run(`UPDATE experts SET ${sets.join(', ')} WHERE id = ?`, values)
-    if (result.changes === 0) return undefined
-    return this.byId(id)
+    const set: Partial<ExpertDoc> = {}
+    if (data.name !== undefined) set.name = data.name
+    if (data.role !== undefined) set.role = data.role
+    if (data.credentials !== undefined) set.credentials = data.credentials
+    if (data.articleCount !== undefined) set.articleCount = data.articleCount
+    if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
+
+    if (Object.keys(set).length === 0) return this.byId(id)
+    const doc = await expertsCol().findOneAndUpdate(
+      { _id: id },
+      { $set: set },
+      { returnDocument: 'after' }
+    )
+    return doc ? docToExpert(doc) : undefined
   },
   async remove(id: number): Promise<boolean> {
-    const result = await db().run('DELETE FROM experts WHERE id = ?', [id])
-    return result.changes > 0
+    const result = await expertsCol().deleteOne({ _id: id })
+    return result.deletedCount > 0
   },
   async count(): Promise<number> {
-    const row = await db().get<{ c: number | string }>('SELECT COUNT(*) AS c FROM experts')
-    return Number(row?.c ?? 0)
+    return expertsCol().countDocuments({})
   },
 }
 
@@ -357,50 +392,44 @@ export const expertRepo = {
 
 export const tipRepo = {
   async list(): Promise<WellnessTip[]> {
-    const rows = await db().query<TipRow>('SELECT * FROM tips ORDER BY id DESC')
-    return rows.map(rowToTip)
+    const docs = await tipsCol().find({}).sort({ _id: -1 }).toArray()
+    return docs.map(docToTip)
   },
   async byId(id: number): Promise<WellnessTip | undefined> {
-    const row = await db().get<TipRow>('SELECT * FROM tips WHERE id = ?', [id])
-    return row ? rowToTip(row) : undefined
+    const doc = await tipsCol().findOne({ _id: id })
+    return doc ? docToTip(doc) : undefined
   },
   async create(data: Omit<WellnessTip, 'id'>): Promise<WellnessTip> {
-    const row = await db().get<{ id: number }>(
-      `INSERT INTO tips (icon, color_bg, color_border, title, text)
-       VALUES (?, ?, ?, ?, ?)
-       RETURNING id`,
-      [data.icon, data.colors.bg, data.colors.border, data.title, data.text]
-    )
-    return { id: Number(row?.id ?? 0), ...data }
+    const _id = await nextId('tips')
+    const doc: TipDoc = {
+      _id,
+      icon: data.icon,
+      colors: { bg: data.colors.bg, border: data.colors.border },
+      title: data.title,
+      text: data.text,
+      createdAt: new Date(),
+    }
+    await tipsCol().insertOne(doc)
+    return docToTip(doc)
   },
   async update(id: number, data: Partial<Omit<WellnessTip, 'id'>>): Promise<WellnessTip | undefined> {
-    const sets: string[] = []
-    const values: unknown[] = []
-    if (data.icon !== undefined) {
-      sets.push('icon = ?')
-      values.push(data.icon)
-    }
-    if (data.colors !== undefined) {
-      sets.push('color_bg = ?', 'color_border = ?')
-      values.push(data.colors.bg, data.colors.border)
-    }
-    if (data.title !== undefined) {
-      sets.push('title = ?')
-      values.push(data.title)
-    }
-    if (data.text !== undefined) {
-      sets.push('text = ?')
-      values.push(data.text)
-    }
-    if (sets.length === 0) return this.byId(id)
-    values.push(id)
-    const result = await db().run(`UPDATE tips SET ${sets.join(', ')} WHERE id = ?`, values)
-    if (result.changes === 0) return undefined
-    return this.byId(id)
+    const set: Partial<TipDoc> = {}
+    if (data.icon !== undefined) set.icon = data.icon
+    if (data.colors !== undefined) set.colors = { bg: data.colors.bg, border: data.colors.border }
+    if (data.title !== undefined) set.title = data.title
+    if (data.text !== undefined) set.text = data.text
+
+    if (Object.keys(set).length === 0) return this.byId(id)
+    const doc = await tipsCol().findOneAndUpdate(
+      { _id: id },
+      { $set: set },
+      { returnDocument: 'after' }
+    )
+    return doc ? docToTip(doc) : undefined
   },
   async remove(id: number): Promise<boolean> {
-    const result = await db().run('DELETE FROM tips WHERE id = ?', [id])
-    return result.changes > 0
+    const result = await tipsCol().deleteOne({ _id: id })
+    return result.deletedCount > 0
   },
 }
 
@@ -410,10 +439,8 @@ export const tipRepo = {
 
 export const planRepo = {
   async list(): Promise<SubscriptionPlan[]> {
-    const rows = await db().query<PlanRow>(
-      'SELECT * FROM plans ORDER BY sort_order ASC, id ASC'
-    )
-    return rows.map(rowToPlan)
+    const docs = await plansCol().find({}).sort({ sortOrder: 1, _id: 1 }).toArray()
+    return docs.map(docToPlan)
   },
 }
 
@@ -423,48 +450,40 @@ export const planRepo = {
 
 export const userRepo = {
   async findByUsername(username: string): Promise<UserRecord | undefined> {
-    const row = await db().get<UserRow>(
-      'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
-      [username]
-    )
-    return row ? rowToUser(row) : undefined
+    const doc = await usersCol().findOne({ usernameLower: username.toLowerCase() })
+    return doc ? docToUser(doc) : undefined
   },
   async findByUserId(userId: string): Promise<UserRecord | undefined> {
-    const row = await db().get<UserRow>('SELECT * FROM users WHERE user_id = ?', [userId])
-    return row ? rowToUser(row) : undefined
+    const doc = await usersCol().findOne({ _id: userId })
+    return doc ? docToUser(doc) : undefined
   },
   async exists(username: string): Promise<boolean> {
     return (await this.findByUsername(username)) !== undefined
   },
   async create(input: { username: string; role: UserRole; passwordHash: string }): Promise<UserRecord> {
     const idPrefix = input.role === 'admin' ? 'admin' : 'user'
-    const row = await db().get<{ c: number | string }>(
-      'SELECT COUNT(*) AS c FROM users WHERE role = ?',
-      [input.role]
-    )
-    const next = Number(row?.c ?? 0) + 1
+    const sameRoleCount = await usersCol().countDocuments({ role: input.role })
+    const next = sameRoleCount + 1
     let userId = `${idPrefix}-${next}`
 
-    while (await this.findByUserId(userId)) {
+    while (await usersCol().findOne({ _id: userId })) {
       userId = `${idPrefix}-${next + Math.floor(Math.random() * 1_000_000)}`
     }
 
-    await db().run(
-      'INSERT INTO users (user_id, username, role, password_hash) VALUES (?, ?, ?, ?)',
-      [userId, input.username, input.role, input.passwordHash]
-    )
-    return (await this.findByUserId(userId))!
+    const doc: UserDoc = {
+      _id: userId,
+      username: input.username,
+      usernameLower: input.username.toLowerCase(),
+      role: input.role,
+      passwordHash: input.passwordHash,
+      createdAt: new Date(),
+    }
+    await usersCol().insertOne(doc)
+    return docToUser(doc)
   },
   async count(role?: UserRole): Promise<number> {
-    if (role) {
-      const r = await db().get<{ c: number | string }>(
-        'SELECT COUNT(*) AS c FROM users WHERE role = ?',
-        [role]
-      )
-      return Number(r?.c ?? 0)
-    }
-    const r = await db().get<{ c: number | string }>('SELECT COUNT(*) AS c FROM users')
-    return Number(r?.c ?? 0)
+    if (role) return usersCol().countDocuments({ role })
+    return usersCol().countDocuments({})
   },
 }
 
@@ -478,15 +497,15 @@ const META_KEYS = {
 
 export const metaRepo = {
   async getString(key: string): Promise<string | undefined> {
-    const row = await db().get<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', [key])
-    return row?.value
+    const doc = await appMetaCol().findOne({ _id: key })
+    return doc?.value
   },
   async setString(key: string, value: string): Promise<void> {
-    const sql =
-      db().dialect === 'postgres'
-        ? 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value'
-        : 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-    await db().run(sql, [key, value])
+    await appMetaCol().updateOne(
+      { _id: key },
+      { $set: { value } },
+      { upsert: true }
+    )
   },
   async getNumber(key: string, fallback = 0): Promise<number> {
     const v = await this.getString(key)

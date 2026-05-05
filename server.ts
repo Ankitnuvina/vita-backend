@@ -3,6 +3,7 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { config } from './config'
+import { closeDb, connectDb } from './db/adapter'
 import { logger } from './logger'
 import { errorHandler } from './middleware/errorHandler'
 import { adminRouter } from './routes/admin.routes'
@@ -40,10 +41,33 @@ app.use((req, res) => {
 
 app.use(errorHandler)
 
-// app.listen(config.port, () => {
-//   logger.info(`[server] Listening on http://localhost:${config.port} (${config.nodeEnv})`)
-//   logger.info(`[server] CORS origins: ${config.corsOrigin.join(', ')}`)
-// })
-app.listen(process.env.PORT || config.port, () => {
-  logger.info(`[server] Listening on ${process.env.PORT}`)
+async function bootstrap(): Promise<void> {
+  await connectDb()
+  const server = app.listen(config.port, () => {
+    logger.info(`[server] Listening on http://localhost:${config.port} (${config.nodeEnv})`)
+    logger.info(`[server] CORS origins: ${config.corsOrigin.join(', ')}`)
+  })
+
+  const shutdown = async (signal: string) => {
+    logger.info(`[server] Received ${signal}, shutting down...`)
+    server.close(async () => {
+      await closeDb()
+      process.exit(0)
+    })
+    setTimeout(async () => {
+      logger.warn('[server] Graceful shutdown timed out, forcing exit.')
+      await closeDb()
+      process.exit(1)
+    }, 10_000).unref()
+  }
+
+  process.on('SIGINT', () => void shutdown('SIGINT'))
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+}
+
+bootstrap().catch(async (err) => {
+  logger.error('[server] Failed to start:', err instanceof Error ? err.message : err)
+  if (err instanceof Error && err.stack) logger.error(err.stack)
+  await closeDb()
+  process.exit(1)
 })
