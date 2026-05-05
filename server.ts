@@ -40,7 +40,10 @@ app.use((req, res) => {
 
 app.use(errorHandler)
 
-app.listen(config.port, () => {
-  logger.info(`[server] Listening on http://localhost:${config.port} (${config.nodeEnv})`)
-  logger.info(`[server] CORS origins: ${config.corsOrigin.join(', ')}`)
+// app.listen(config.port, () => {
+//   logger.info(`[server] Listening on http://localhost:${config.port} (${config.nodeEnv})`)
+//   logger.info(`[server] CORS origins: ${config.corsOrigin.join(', ')}`)
+// })
+app.listen(process.env.PORT || config.port, () => {
+  logger.info(`[server] Listening on ${process.env.PORT}`)
 })
