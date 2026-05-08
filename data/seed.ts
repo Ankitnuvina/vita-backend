@@ -1,3 +1,8 @@
+export interface Section {
+  heading: string
+  items: string[]
+}
+
 export interface Article {
   id: number
   cat: string
@@ -9,8 +14,13 @@ export interface Article {
   readTime: string
   imageUrl: string
   excerpt: string
+  articleStatus: 'draft' | 'published' | 'scheduled'
   isPremium: boolean
   slug: string
+  sections?: Section[]
+  tags?: string[]
+  seoTitle?: string
+  seoDescription?: string
 }
 
 export interface Podcast {
@@ -64,6 +74,7 @@ export const seedArticles: Article[] = [
     readTime: '8 min',
     imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=700&q=80',
     excerpt: 'Research reveals how micro-stressors flood your body with cortisol — and interventions that work.',
+    articleStatus: 'published',
     isPremium: false,
     slug: 'neuroscience-micro-stress',
   },
@@ -78,6 +89,7 @@ export const seedArticles: Article[] = [
     readTime: '10 min',
     imageUrl: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=500&q=80',
     excerpt: 'A landmark meta-analysis of 48 studies settles the fermented foods debate.',
+    articleStatus: 'published',
     isPremium: true,
     slug: 'fermented-foods-gut-brain',
   },
@@ -92,6 +104,7 @@ export const seedArticles: Article[] = [
     readTime: '6 min',
     imageUrl: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=500&q=80',
     excerpt: 'Elite athletes and longevity researchers agree: the magic happens at lower intensity.',
+    articleStatus: 'published',
     isPremium: false,
     slug: 'zone-2-training-longevity',
   },
@@ -106,6 +119,7 @@ export const seedArticles: Article[] = [
     readTime: '5 min',
     imageUrl: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=500&q=80',
     excerpt: 'Evidence-based steps to restructure your circadian rhythm in two weeks.',
+    articleStatus: 'published',
     isPremium: true,
     slug: 'sleep-architecture-reset',
   },
@@ -120,6 +134,7 @@ export const seedArticles: Article[] = [
     readTime: '12 min',
     imageUrl: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=500&q=80',
     excerpt: 'A sober look at whether NAD+ supplements actually extend healthspan.',
+    articleStatus: 'published',
     isPremium: true,
     slug: 'nad-precursors-2026',
   },

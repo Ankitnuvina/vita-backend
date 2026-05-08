@@ -37,8 +37,11 @@ export const articleSchema = z.object({
   readTime: z.string().min(1).max(16),
   imageUrl: z.string().url(),
   excerpt: z.string().min(1).max(500),
-  isPremium: z.boolean(),
-  slug: z.string().min(1).max(120),
+  articleStatus: z.enum(['draft', 'published', 'scheduled',]), isPremium: z.boolean(), slug: z.string().min(1).max(120),
+  sections: z.array(z.object({ heading: z.string().min(1).max(200), items: z.array(z.string().min(1).max(500)).min(1), })).optional(),
+  tags: z.array(z.string()).optional(),
+  seoTitle: z.string().max(200).optional(),
+  seoDescription: z.string().max(500).optional(),
 })
 
 export const podcastSchema = z.object({

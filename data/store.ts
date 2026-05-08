@@ -41,9 +41,14 @@ interface ArticleDoc {
   readTime: string
   imageUrl: string
   excerpt: string
+  articleStatus: 'draft' | 'published' | 'scheduled'
   isPremium: boolean
   slug: string
   createdAt: Date
+  sections?: Array<{ heading: string; items: string[] }>
+  tags?: string[]
+  seoTitle?: string
+  seoDescription?: string
 }
 
 interface PodcastDoc {
@@ -147,8 +152,13 @@ function docToArticle(d: ArticleDoc): Article {
     readTime: d.readTime,
     imageUrl: d.imageUrl,
     excerpt: d.excerpt,
+    articleStatus: d.articleStatus,
     isPremium: d.isPremium,
     slug: d.slug,
+    sections: d.sections,
+    tags: d.tags,
+    seoTitle: d.seoTitle,
+    seoDescription: d.seoDescription,
   }
 }
 
@@ -240,8 +250,13 @@ export const articleRepo = {
       readTime: data.readTime,
       imageUrl: data.imageUrl,
       excerpt: data.excerpt,
+      articleStatus: data.articleStatus,
       isPremium: data.isPremium,
       slug: data.slug,
+      sections: data.sections,
+      tags: data.tags,
+      seoTitle: data.seoTitle,
+      seoDescription: data.seoDescription,
       createdAt: new Date(),
     }
     await articlesCol().insertOne(doc)
@@ -258,8 +273,13 @@ export const articleRepo = {
     if (data.readTime !== undefined) set.readTime = data.readTime
     if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
     if (data.excerpt !== undefined) set.excerpt = data.excerpt
+    if (data.articleStatus !== undefined) set.articleStatus = data.articleStatus
     if (data.isPremium !== undefined) set.isPremium = data.isPremium
     if (data.slug !== undefined) set.slug = data.slug
+    if (data.sections !== undefined) set.sections = data.sections
+    if (data.tags !== undefined) set.tags = data.tags
+    if (data.seoTitle !== undefined) set.seoTitle = data.seoTitle
+    if (data.seoDescription !== undefined) set.seoDescription = data.seoDescription
 
     if (Object.keys(set).length === 0) return this.byId(id)
     const doc = await articlesCol().findOneAndUpdate(
