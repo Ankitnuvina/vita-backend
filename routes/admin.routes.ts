@@ -9,11 +9,32 @@ import {
 import { requireAdmin } from '../middleware/requireAdmin'
 import { requireAuth } from '../middleware/requireAuth'
 
+import { upload } from '@/middleware/upload'
+
 const router = Router()
 
 router.use(requireAuth, requireAdmin)
 
 router.get('/stats', getStats)
+
+router.post(
+  '/upload-image',
+  upload.single('image'),
+  (req, res) => {
+    if (!req.file) {
+      res.status(400).json({
+        error: 'No image uploaded',
+      })
+      return
+    }
+
+   const imageUrl = `${process.env.APP_URL}/uploads/${req.file.filename}`
+
+    res.status(201).json({
+      imageUrl,
+    })
+  }
+)
 
 router.get('/articles', articleHandlers.list)
 router.post('/articles', articleHandlers.create)

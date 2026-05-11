@@ -10,7 +10,13 @@ import { adminRouter } from './routes/admin.routes'
 import { authRouter } from './routes/auth.routes'
 import { contentRouter } from './routes/content.routes'
 
+import path from 'path'
+
+
+
 const app = express()
+
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 app.set('trust proxy', 1)
 
