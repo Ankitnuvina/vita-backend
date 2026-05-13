@@ -63,6 +63,7 @@ export const Collections = {
   tips: 'tips',
   plans: 'plans',
   appMeta: 'app_meta',
+  mediaProgress: 'media_progress',
   counters: 'counters',
 } as const
 

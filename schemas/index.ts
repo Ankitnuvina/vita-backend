@@ -33,11 +33,16 @@ export const articleSchema = z.object({
   categoryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   title: z.string().min(1).max(200),
   author: z.string().min(1).max(120),
+  expertId: z.number().int().positive().optional(),
   date: z.string().min(1).max(32),
   readTime: z.string().min(1).max(16),
   imageUrl: z.string().url(),
   excerpt: z.string().min(1).max(500),
   articleStatus: z.enum(['draft', 'published', 'scheduled',]), isPremium: z.boolean(), slug: z.string().min(1).max(120),
+  isFeatured: z.boolean().optional(),
+  publishedAt: z.string().datetime().optional(),
+  popularityScore: z.number().int().min(0).optional(),
+  bannerImageUrl: z.string().url().optional(),
   sections: z.array(z.object({ heading: z.string().min(1).max(200), items: z.array(z.string().min(1).max(500)).min(1), })).optional(),
   tags: z.array(z.string()).optional(),
   seoTitle: z.string().max(200).optional(),
@@ -51,13 +56,15 @@ export const podcastSchema = z.object({
   guest: z.string().min(1).max(120),
   duration: z.string().min(1).max(16),
   date: z.string().min(1).max(32),
-  imageUrl: z.string().url(),
+  // imageUrl: z.string().url(),
+  videoUrl: z.string().url(),
 })
 
 export const expertSchema = z.object({
   name: z.string().min(1).max(120),
   role: z.string().min(1).max(120),
   credentials: z.string().min(1).max(200),
+  bio: z.string().min(1).max(1000).optional(),
   articleCount: z.number().int().min(0).max(10000),
   imageUrl: z.string().url(),
 })
@@ -72,7 +79,14 @@ export const tipSchema = z.object({
   text: z.string().min(1).max(500),
 })
 
+export const mediaProgressSchema = z.object({
+  kind: z.enum(['audio', 'video']),
+  positionSec: z.number().min(0),
+  durationSec: z.number().min(0).optional(),
+})
+
 export type ArticleInput = z.infer<typeof articleSchema>
 export type PodcastInput = z.infer<typeof podcastSchema>
 export type ExpertInput = z.infer<typeof expertSchema>
 export type TipInput = z.infer<typeof tipSchema>
+export type MediaProgressInput = z.infer<typeof mediaProgressSchema>

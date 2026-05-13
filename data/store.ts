@@ -37,6 +37,7 @@ interface ArticleDoc {
   categoryColor: string
   title: string
   author: string
+  expertId?: number
   date: string
   readTime: string
   imageUrl: string
@@ -44,6 +45,10 @@ interface ArticleDoc {
   articleStatus: 'draft' | 'published' | 'scheduled'
   isPremium: boolean
   slug: string
+  isFeatured?: boolean
+  publishedAt?: string
+  popularityScore?: number
+  bannerImageUrl?: string
   createdAt: Date
   sections?: Array<{ heading: string; items: string[] }>
   tags?: string[]
@@ -59,7 +64,8 @@ interface PodcastDoc {
   guest: string
   duration: string
   date: string
-  imageUrl: string
+  // imageUrl: string
+    videoUrl: string   
   createdAt: Date
 }
 
@@ -68,6 +74,7 @@ interface ExpertDoc {
   name: string
   role: string
   credentials: string
+  bio: string
   articleCount: number
   imageUrl: string
   createdAt: Date
@@ -110,6 +117,16 @@ interface AppMetaDoc {
   value: string
 }
 
+interface MediaProgressDoc {
+  _id: string
+  userId: string
+  mediaId: string
+  kind: 'audio' | 'video'
+  positionSec: number
+  durationSec?: number
+  updatedAt: Date
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Collection accessors                                                      */
 /* -------------------------------------------------------------------------- */
@@ -135,6 +152,9 @@ function usersCol(): Collection<UserDoc> {
 function appMetaCol(): Collection<AppMetaDoc> {
   return getDb().collection<AppMetaDoc>(Collections.appMeta)
 }
+function mediaProgressCol(): Collection<MediaProgressDoc> {
+  return getDb().collection<MediaProgressDoc>(Collections.mediaProgress)
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Document → API mappers (preserve every output field exactly)             */
@@ -148,6 +168,7 @@ function docToArticle(d: ArticleDoc): Article {
     categoryColor: d.categoryColor,
     title: d.title,
     author: d.author,
+    expertId: d.expertId,
     date: d.date,
     readTime: d.readTime,
     imageUrl: d.imageUrl,
@@ -155,6 +176,10 @@ function docToArticle(d: ArticleDoc): Article {
     articleStatus: d.articleStatus,
     isPremium: d.isPremium,
     slug: d.slug,
+    isFeatured: d.isFeatured,
+    publishedAt: d.publishedAt,
+    popularityScore: d.popularityScore,
+    bannerImageUrl: d.bannerImageUrl,
     sections: d.sections,
     tags: d.tags,
     seoTitle: d.seoTitle,
@@ -171,7 +196,8 @@ function docToPodcast(d: PodcastDoc): Podcast {
     guest: d.guest,
     duration: d.duration,
     date: d.date,
-    imageUrl: d.imageUrl,
+    // imageUrl: d.imageUrl,
+    videoUrl: d.videoUrl,
   }
 }
 
@@ -181,6 +207,7 @@ function docToExpert(d: ExpertDoc): Expert {
     name: d.name,
     role: d.role,
     credentials: d.credentials,
+    bio: typeof d.bio === 'string' ? d.bio : '',
     articleCount: d.articleCount,
     imageUrl: d.imageUrl,
   }
@@ -224,6 +251,26 @@ function docToUser(d: UserDoc): UserRecord {
   }
 }
 
+export interface MediaProgressRecord {
+  mediaId: string
+  userId: string
+  kind: 'audio' | 'video'
+  positionSec: number
+  durationSec?: number
+  updatedAt: string
+}
+
+function docToMediaProgress(d: MediaProgressDoc): MediaProgressRecord {
+  return {
+    mediaId: d.mediaId,
+    userId: d.userId,
+    kind: d.kind,
+    positionSec: d.positionSec,
+    durationSec: d.durationSec,
+    updatedAt: d.updatedAt.toISOString(),
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Articles                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -246,6 +293,7 @@ export const articleRepo = {
       categoryColor: data.categoryColor,
       title: data.title,
       author: data.author,
+      expertId: data.expertId,
       date: data.date,
       readTime: data.readTime,
       imageUrl: data.imageUrl,
@@ -253,6 +301,10 @@ export const articleRepo = {
       articleStatus: data.articleStatus,
       isPremium: data.isPremium,
       slug: data.slug,
+      isFeatured: data.isFeatured,
+      publishedAt: data.publishedAt,
+      popularityScore: data.popularityScore,
+      bannerImageUrl: data.bannerImageUrl,
       sections: data.sections,
       tags: data.tags,
       seoTitle: data.seoTitle,
@@ -269,6 +321,7 @@ export const articleRepo = {
     if (data.categoryColor !== undefined) set.categoryColor = data.categoryColor
     if (data.title !== undefined) set.title = data.title
     if (data.author !== undefined) set.author = data.author
+    if (data.expertId !== undefined) set.expertId = data.expertId
     if (data.date !== undefined) set.date = data.date
     if (data.readTime !== undefined) set.readTime = data.readTime
     if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
@@ -276,6 +329,10 @@ export const articleRepo = {
     if (data.articleStatus !== undefined) set.articleStatus = data.articleStatus
     if (data.isPremium !== undefined) set.isPremium = data.isPremium
     if (data.slug !== undefined) set.slug = data.slug
+    if (data.isFeatured !== undefined) set.isFeatured = data.isFeatured
+    if (data.publishedAt !== undefined) set.publishedAt = data.publishedAt
+    if (data.popularityScore !== undefined) set.popularityScore = data.popularityScore
+    if (data.bannerImageUrl !== undefined) set.bannerImageUrl = data.bannerImageUrl
     if (data.sections !== undefined) set.sections = data.sections
     if (data.tags !== undefined) set.tags = data.tags
     if (data.seoTitle !== undefined) set.seoTitle = data.seoTitle
@@ -295,6 +352,56 @@ export const articleRepo = {
   },
   async count(): Promise<number> {
     return articlesCol().countDocuments({})
+  },
+  async listByExpert(expert: { id: number; name: string }): Promise<Article[]> {
+    const docs = await articlesCol()
+      .find({ $or: [{ expertId: expert.id }, { author: expert.name }] })
+      .sort({ _id: -1 })
+      .toArray()
+    return docs.map(docToArticle)
+  },
+  async listBlogs(options?: {
+    featured?: boolean
+    category?: string
+    sort?: 'latest' | 'popular'
+    limit?: number
+  }): Promise<Article[]> {
+    const query: {
+      articleStatus: 'published'
+      isFeatured?: boolean
+      categoryLabel?: string
+    } = { articleStatus: 'published' }
+    if (options?.featured !== undefined) query.isFeatured = options.featured
+    if (options?.category) query.categoryLabel = options.category
+
+    const docs = await articlesCol().find(query).toArray()
+    const items = docs.map(docToArticle)
+
+    if (options?.sort === 'popular') {
+      items.sort((a, b) => (b.popularityScore ?? 0) - (a.popularityScore ?? 0))
+    } else {
+      items.sort((a, b) => {
+        const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0
+        const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0
+        return tb - ta
+      })
+    }
+
+    if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+      return items.slice(0, Math.floor(options.limit))
+    }
+    return items
+  },
+  async listBlogCategories(): Promise<string[]> {
+    const categories = await articlesCol().distinct('categoryLabel', { articleStatus: 'published' })
+    return categories
+      .map((c) => String(c))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b))
+  },
+  async bySlug(slug: string): Promise<Article | undefined> {
+    const doc = await articlesCol().findOne({ slug, articleStatus: 'published' })
+    return doc ? docToArticle(doc) : undefined
   },
 }
 
@@ -321,7 +428,8 @@ export const podcastRepo = {
       guest: data.guest,
       duration: data.duration,
       date: data.date,
-      imageUrl: data.imageUrl,
+      // imageUrl: data.imageUrl,
+       videoUrl: data.videoUrl,
       createdAt: new Date(),
     }
     await podcastsCol().insertOne(doc)
@@ -335,7 +443,8 @@ export const podcastRepo = {
     if (data.guest !== undefined) set.guest = data.guest
     if (data.duration !== undefined) set.duration = data.duration
     if (data.date !== undefined) set.date = data.date
-    if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
+    // if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
+    if (data.videoUrl !== undefined) set.videoUrl = data.videoUrl
 
     if (Object.keys(set).length === 0) return this.byId(id)
     const doc = await podcastsCol().findOneAndUpdate(
@@ -374,6 +483,7 @@ export const expertRepo = {
       name: data.name,
       role: data.role,
       credentials: data.credentials,
+      bio: data.bio ?? '',
       articleCount: data.articleCount,
       imageUrl: data.imageUrl,
       createdAt: new Date(),
@@ -386,6 +496,7 @@ export const expertRepo = {
     if (data.name !== undefined) set.name = data.name
     if (data.role !== undefined) set.role = data.role
     if (data.credentials !== undefined) set.credentials = data.credentials
+    if (data.bio !== undefined) set.bio = data.bio
     if (data.articleCount !== undefined) set.articleCount = data.articleCount
     if (data.imageUrl !== undefined) set.imageUrl = data.imageUrl
 
@@ -535,5 +646,52 @@ export const metaRepo = {
   },
   async getSubscriberCount(): Promise<number> {
     return this.getNumber(META_KEYS.subscriberCount, 0)
+  },
+}
+
+export const mediaProgressRepo = {
+  key(userId: string, mediaId: string): string {
+    return `${userId}:${mediaId}`
+  },
+  async get(userId: string, mediaId: string): Promise<MediaProgressRecord | undefined> {
+    const doc = await mediaProgressCol().findOne({ _id: this.key(userId, mediaId) })
+    return doc ? docToMediaProgress(doc) : undefined
+  },
+  async list(userId: string): Promise<MediaProgressRecord[]> {
+    const docs = await mediaProgressCol()
+      .find({ userId })
+      .sort({ updatedAt: -1 })
+      .toArray()
+    return docs.map(docToMediaProgress)
+  },
+  async upsert(input: {
+    userId: string
+    mediaId: string
+    kind: 'audio' | 'video'
+    positionSec: number
+    durationSec?: number
+  }): Promise<MediaProgressRecord> {
+    const _id = this.key(input.userId, input.mediaId)
+    await mediaProgressCol().updateOne(
+      { _id },
+      {
+        $set: {
+          userId: input.userId,
+          mediaId: input.mediaId,
+          kind: input.kind,
+          positionSec: input.positionSec,
+          durationSec: input.durationSec,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    )
+    const doc = await mediaProgressCol().findOne({ _id })
+    if (!doc) throw new Error('Failed to save media progress')
+    return docToMediaProgress(doc)
+  },
+  async remove(userId: string, mediaId: string): Promise<boolean> {
+    const result = await mediaProgressCol().deleteOne({ _id: this.key(userId, mediaId) })
+    return result.deletedCount > 0
   },
 }
