@@ -9,7 +9,6 @@ import {
 import { requireAdmin } from '../middleware/requireAdmin'
 import { requireAuth } from '../middleware/requireAuth'
 
-// import { upload } from '@/middleware/upload'
 import { uploadImage, uploadVideo } from '@/middleware/upload'
 
 const router = Router()
@@ -18,37 +17,7 @@ router.use(requireAuth, requireAdmin)
 
 router.get('/stats', getStats)
 
-// router.post(
-//   '/upload-image',
-//   upload.single('image'),
-//   (req, res) => {
-//     if (!req.file) {
-//       res.status(400).json({
-//         error: 'No image uploaded',
-//       })
-//       return
-//     }
 
-//    const imageUrl = `${process.env.APP_URL}/uploads/${req.file.filename}`
-
-//     res.status(201).json({
-//       imageUrl,
-//     })
-//   }
-// )
-
-// router.post(
-//   '/upload-video',
-//   upload.single('video'),   // multer config mein video mimetypes allow karo
-//   (req, res) => {
-//     if (!req.file) {
-//       res.status(400).json({ error: 'No video uploaded' })
-//       return
-//     }
-//     const videoUrl = `${process.env.APP_URL}/uploads/${req.file.filename}`
-//     res.status(201).json({ videoUrl })
-//   }
-// )
 // Image upload
 router.post(
   '/upload-image',

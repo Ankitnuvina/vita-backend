@@ -65,7 +65,7 @@ interface PodcastDoc {
   duration: string
   date: string
   // imageUrl: string
-    videoUrl: string   
+  videoUrl: string
   createdAt: Date
 }
 
@@ -127,6 +127,17 @@ interface MediaProgressDoc {
   updatedAt: Date
 }
 
+
+interface LikeDoc {
+  _id: string          // `${userId}:${contentType}:${contentId}`
+  userId: string
+  contentType: 'article' | 'podcast' | 'blog' | 'video'
+  contentId: string
+  createdAt: Date
+}
+
+
+
 /* -------------------------------------------------------------------------- */
 /*  Collection accessors                                                      */
 /* -------------------------------------------------------------------------- */
@@ -152,8 +163,14 @@ function usersCol(): Collection<UserDoc> {
 function appMetaCol(): Collection<AppMetaDoc> {
   return getDb().collection<AppMetaDoc>(Collections.appMeta)
 }
+
+
 function mediaProgressCol(): Collection<MediaProgressDoc> {
   return getDb().collection<MediaProgressDoc>(Collections.mediaProgress)
+}
+
+function likesCol(): Collection<LikeDoc> {
+  return getDb().collection<LikeDoc>('likes')
 }
 
 /* -------------------------------------------------------------------------- */
@@ -242,11 +259,6 @@ function docToUser(d: UserDoc): UserRecord {
     username: d.username,
     role: d.role,
     passwordHash: d.passwordHash,
-    /**
-     * Stringified to match the SQL contract (which returned ISO/timestamp
-     * strings, not Date objects). The frontend never inspects this — it's
-     * only used internally — but keeping the shape stable avoids surprises.
-     */
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
   }
 }
@@ -260,6 +272,14 @@ export interface MediaProgressRecord {
   updatedAt: string
 }
 
+export interface LikeRecord {
+  userId: string
+  contentType: 'article' | 'podcast' | 'blog' | 'video'
+  contentId: string
+  createdAt: string
+}
+
+
 function docToMediaProgress(d: MediaProgressDoc): MediaProgressRecord {
   return {
     mediaId: d.mediaId,
@@ -268,6 +288,15 @@ function docToMediaProgress(d: MediaProgressDoc): MediaProgressRecord {
     positionSec: d.positionSec,
     durationSec: d.durationSec,
     updatedAt: d.updatedAt.toISOString(),
+  }
+}
+
+function docToLike(d: LikeDoc): LikeRecord {
+  return {
+    userId: d.userId,
+    contentType: d.contentType,
+    contentId: d.contentId,
+    createdAt: d.createdAt.toISOString(),
   }
 }
 
@@ -429,7 +458,7 @@ export const podcastRepo = {
       duration: data.duration,
       date: data.date,
       // imageUrl: data.imageUrl,
-       videoUrl: data.videoUrl,
+      videoUrl: data.videoUrl,
       createdAt: new Date(),
     }
     await podcastsCol().insertOne(doc)
@@ -649,6 +678,10 @@ export const metaRepo = {
   },
 }
 
+
+/* -------------------------------------------------------------------------- */
+/*  Media Progress repo                                                        */
+/* -------------------------------------------------------------------------- */
 export const mediaProgressRepo = {
   key(userId: string, mediaId: string): string {
     return `${userId}:${mediaId}`
@@ -693,5 +726,78 @@ export const mediaProgressRepo = {
   async remove(userId: string, mediaId: string): Promise<boolean> {
     const result = await mediaProgressCol().deleteOne({ _id: this.key(userId, mediaId) })
     return result.deletedCount > 0
+  },
+}
+
+
+
+/* -------------------------------------------------------------------------- */
+/*  Like & Unlike repo                                                        */
+/* -------------------------------------------------------------------------- */
+
+export const likesRepo = {
+  key(userId: string, contentType: string, contentId: string): string {
+    return `${userId}:${contentType}:${contentId}`
+  },
+
+  // Toggle like — return karta hai { liked: boolean, count: number }
+  async toggle(userId: string, contentType: LikeRecord['contentType'], contentId: string): Promise<{ liked: boolean; count: number }> {
+    const _id = this.key(userId, contentType, contentId)
+    const existing = await likesCol().findOne({ _id })
+
+    if (existing) {
+      await likesCol().deleteOne({ _id })
+    } else {
+      await likesCol().insertOne({
+        _id,
+        userId,
+        contentType,
+        contentId,
+        createdAt: new Date(),
+      })
+    }
+
+    const count = await likesCol().countDocuments({ contentType, contentId })
+    return { liked: !existing, count }
+  },
+
+  // Ek content ka like count
+  async getCount(contentType: LikeRecord['contentType'], contentId: string): Promise<number> {
+    return likesCol().countDocuments({ contentType, contentId })
+  },
+
+  // User ne like kiya hai ya nahi
+  async hasLiked(userId: string, contentType: LikeRecord['contentType'], contentId: string): Promise<boolean> {
+    const doc = await likesCol().findOne({ _id: this.key(userId, contentType, contentId) })
+    return !!doc
+  },
+
+  // User ki saari liked content
+  async listByUser(userId: string): Promise<LikeRecord[]> {
+    const docs = await likesCol().find({ userId }).sort({ createdAt: -1 }).toArray()
+    return docs.map(docToLike)
+  },
+
+  // Multiple content items ke counts ek saath
+  async getCounts(
+    contentType: LikeRecord['contentType'],
+    contentIds: string[]
+  ): Promise<Record<string, number>> {
+    const docs = await likesCol()
+      .aggregate([
+        { $match: { contentType, contentId: { $in: contentIds } } },
+        { $group: { _id: '$contentId', count: { $sum: 1 } } },
+      ])
+      .toArray()
+
+    // Sabko 0 se initialize karo
+    const result: Record<string, number> = {}
+    for (const id of contentIds) result[id] = 0
+
+    // Jo counts mile woh fill karo
+    for (const doc of docs) {
+      result[doc._id as string] = doc.count as number
+    }
+    return result
   },
 }
