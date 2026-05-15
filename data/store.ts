@@ -800,4 +800,118 @@ export const likesRepo = {
     }
     return result
   },
+
+
+
+  async getAnalytics(filters?: {
+  user?: string
+  contentType?: string
+}) {
+  const match: Record<string, unknown> = {}
+
+  if (filters?.contentType && filters.contentType !== 'all') {
+    match.contentType = filters.contentType
+  }
+
+  const pipeline = [
+    {
+      $match: match,
+    },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+
+    {
+      $unwind: '$user',
+    },
+
+    {
+      $addFields: {
+        userName: '$user.username',
+      },
+    },
+
+    {
+      $match: filters?.user
+        ? {
+            userName: {
+              $regex: filters.user,
+              $options: 'i',
+            },
+          }
+        : {},
+    },
+
+    {
+      $group: {
+        _id: {
+          contentId: '$contentId',
+          contentType: '$contentType',
+          userId: '$userId',
+        },
+
+        userName: { $first: '$userName' },
+        likedAt: { $first: '$createdAt' },
+        contentId: { $first: '$contentId' },
+        contentType: { $first: '$contentType' },
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'likes',
+        let: {
+          contentId: '$contentId',
+          contentType: '$contentType',
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$contentId', '$$contentId'] },
+                  { $eq: ['$contentType', '$$contentType'] },
+                ],
+              },
+            },
+          },
+        ],
+        as: 'allLikes',
+      },
+    },
+
+    {
+      $addFields: {
+        totalLikes: {
+          $size: '$allLikes',
+        },
+      },
+    },
+
+    {
+      $project: {
+        _id: 0,
+        userName: 1,
+        contentId: 1,
+        contentType: 1,
+        likedAt: 1,
+        totalLikes: 1,
+      },
+    },
+
+    {
+      $sort: {
+        likedAt: -1,
+      },
+    },
+  ]
+
+  return likesCol().aggregate(pipeline).toArray()
+}
 }

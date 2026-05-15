@@ -2,14 +2,13 @@ import type { CookieOptions, Response } from 'express'
 import { config, isProd } from '../config'
 import { cookieNames } from './jwt.service'
 
-const FIFTEEN_MIN_MS = 15 * 60 * 1000
+const FIFTEEN_MIN_MS = 40 * 60 * 1000
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
 function baseOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: isProd,
-    // sameSite: isProd ? 'strict' : 'lax',
     sameSite: isProd ? 'none' : 'lax',
     domain: config.cookieDomain,
     path: '/',

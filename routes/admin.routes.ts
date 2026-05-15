@@ -5,11 +5,13 @@ import {
   getStats,
   podcastHandlers,
   tipHandlers,
+  getLikesAnalytics 
 } from '../controllers/admin.controller'
 import { requireAdmin } from '../middleware/requireAdmin'
 import { requireAuth } from '../middleware/requireAuth'
 
 import { uploadImage, uploadVideo } from '@/middleware/upload'
+
 
 const router = Router()
 
@@ -65,5 +67,7 @@ router.get('/tips', tipHandlers.list)
 router.post('/tips', tipHandlers.create)
 router.put('/tips/:id', tipHandlers.update)
 router.delete('/tips/:id', tipHandlers.remove)
+
+router.get('/likes-analytics', getLikesAnalytics)
 
 export { router as adminRouter }

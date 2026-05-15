@@ -6,6 +6,7 @@ import {
   metaRepo,
   podcastRepo,
   tipRepo,
+  likesRepo,
 } from '../data/store'
 import { articleSchema, expertSchema, podcastSchema, tipSchema } from '../schemas'
 import { logger } from '../logger'
@@ -124,6 +125,32 @@ export const getStats: RequestHandler = async (_req, res, next) => {
       metaRepo.getSubscriberCount(),
     ])
     res.json({ articleCount, podcastCount, expertCount, subscriberCount })
+  } catch (err) {
+    next(err)
+  }
+}
+
+
+
+
+
+
+export const getLikesAnalytics: RequestHandler = async (req, res, next) => {
+  try {
+    const user = typeof req.query.user === 'string'
+      ? req.query.user
+      : undefined
+
+    const contentType = typeof req.query.contentType === 'string'
+      ? req.query.contentType
+      : undefined
+
+    const data = await likesRepo.getAnalytics({
+      user,
+      contentType,
+    })
+
+    res.json(data)
   } catch (err) {
     next(err)
   }
