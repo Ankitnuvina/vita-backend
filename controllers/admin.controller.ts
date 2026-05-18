@@ -134,22 +134,21 @@ export const getStats: RequestHandler = async (_req, res, next) => {
 
 
 
+const VALID_CONTENT_TYPES = ['article', 'podcast', 'blog', 'video'] as const
+type ContentType = typeof VALID_CONTENT_TYPES[number]
 
 export const getLikesAnalytics: RequestHandler = async (req, res, next) => {
   try {
-    const user = typeof req.query.user === 'string'
-      ? req.query.user
+    const user = typeof req.query.user === 'string' && req.query.user.trim()
+      ? req.query.user.trim()
       : undefined
 
-    const contentType = typeof req.query.contentType === 'string'
-      ? req.query.contentType
+    const rawType = typeof req.query.contentType === 'string' ? req.query.contentType.trim() : ''
+    const contentType: ContentType | undefined = VALID_CONTENT_TYPES.includes(rawType as ContentType)
+      ? (rawType as ContentType)
       : undefined
 
-    const data = await likesRepo.getAnalytics({
-      user,
-      contentType,
-    })
-
+    const data = await likesRepo.getAnalytics({ user, contentType })
     res.json(data)
   } catch (err) {
     next(err)
