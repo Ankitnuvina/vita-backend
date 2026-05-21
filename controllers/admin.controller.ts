@@ -1,13 +1,6 @@
 import type { Request, RequestHandler, Response } from 'express'
 import { ZodError, type ZodRawShape, type ZodObject } from 'zod'
-import {
-  articleRepo,
-  expertRepo,
-  metaRepo,
-  podcastRepo,
-  tipRepo,
-  likesRepo,
-} from '../data/store'
+import { articleRepo, expertRepo, metaRepo, podcastRepo, tipRepo, likesRepo, } from '../data/store'
 import { articleSchema, expertSchema, podcastSchema, tipSchema } from '../schemas'
 import { logger } from '../logger'
 
@@ -129,10 +122,6 @@ export const getStats: RequestHandler = async (_req, res, next) => {
     next(err)
   }
 }
-
-
-
-
 
 const VALID_CONTENT_TYPES = ['article', 'podcast', 'blog', 'video'] as const
 type ContentType = typeof VALID_CONTENT_TYPES[number]

@@ -65,9 +65,10 @@ export const Collections = {
   appMeta: 'app_meta',
   mediaProgress: 'media_progress',
   counters: 'counters',
+  blogs: 'blogs',
 } as const
 
-export type CounterName = 'articles' | 'podcasts' | 'experts' | 'tips'
+export type CounterName = 'articles' | 'podcasts' | 'experts' | 'tips' | 'blogs'
 
 interface CounterDoc {
   _id: CounterName

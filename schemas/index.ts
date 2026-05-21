@@ -56,7 +56,6 @@ export const podcastSchema = z.object({
   guest: z.string().min(1).max(120),
   duration: z.string().min(1).max(16),
   date: z.string().min(1).max(32),
-  // imageUrl: z.string().url(),
   videoUrl: z.string().url(),
 })
 

@@ -17,9 +17,18 @@ const nodeEnv = optional('NODE_ENV', 'development')
 
 export const isProd = nodeEnv === 'production'
 
+const port = Number(optional('PORT', '3005'))
+
 export const config = {
-  port: Number(optional('PORT', '3005')),
+  port,
   nodeEnv,
+  /**
+   * Public base URL of this API, used to build absolute URLs for
+   * uploaded assets (images / videos).
+   * In dev defaults to http://localhost:<port>.
+   * In production set APP_URL=https://api.example.com in .env.
+   */
+  appUrl: optional('APP_URL', `http://localhost:${port}`).replace(/\/+$/, ''),
   corsOrigin: optional('CORS_ORIGIN', 'http://localhost:5173')
     .split(',')
     .map((s) => s.trim())

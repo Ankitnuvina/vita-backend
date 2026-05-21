@@ -4,18 +4,9 @@ import { ZodError } from 'zod'
 import { config } from '../config'
 import { userRepo } from '../data/store'
 import { logger } from '../logger'
-import {
-  loginSchema,
-  registerAdminSchema,
-  registerUserSchema,
-} from '../schemas'
+import { loginSchema, registerAdminSchema, registerUserSchema, } from '../schemas'
 import { clearAuthCookies, setAuthCookies } from '../services/cookies.service'
-import {
-  cookieNames,
-  signAccessToken,
-  signRefreshToken,
-  verifyRefreshToken,
-} from '../services/jwt.service'
+import { cookieNames, signAccessToken, signRefreshToken, verifyRefreshToken, } from '../services/jwt.service'
 import type { AuthUser, UserRole } from '../types'
 
 function publicUser(user: { userId: string; role: UserRole }): AuthUser {

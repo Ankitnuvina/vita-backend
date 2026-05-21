@@ -36,8 +36,7 @@ export interface Podcast {
   guest: string
   duration: string
   date: string
-  // imageUrl: string
-  videoUrl: string 
+  videoUrl: string
 }
 
 export interface Expert {
@@ -174,8 +173,7 @@ export const seedPodcasts: Podcast[] = [
     guest: 'Dr. Rachel Torres',
     duration: '1h 08m',
     date: 'Apr 18',
-    // imageUrl: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=300&q=80',
-     videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
   },
   {
     id: 2,
@@ -185,8 +183,7 @@ export const seedPodcasts: Podcast[] = [
     guest: 'Dr. Mark Chen',
     duration: '54m',
     date: 'Apr 11',
-    // imageUrl: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300&q=80',
-     videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
   },
   {
     id: 3,
@@ -196,8 +193,7 @@ export const seedPodcasts: Podcast[] = [
     guest: 'Dr. Peter Lim',
     duration: '1h 26m',
     date: 'Apr 4',
-    // imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&q=80',
-     videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
   },
   {
     id: 4,
@@ -207,8 +203,7 @@ export const seedPodcasts: Podcast[] = [
     guest: 'Dr. Sara Wells',
     duration: '1h 10m',
     date: 'Mar 28',
-    // imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=300&q=80',
-     videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
   },
 ]
 

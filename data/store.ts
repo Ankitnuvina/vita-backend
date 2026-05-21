@@ -1,13 +1,7 @@
 import type { Collection } from 'mongodb'
 import { Collections, getDb, nextId } from '../db/adapter'
 import type { UserRole } from '../types'
-import type {
-  Article,
-  Expert,
-  Podcast,
-  SubscriptionPlan,
-  WellnessTip,
-} from './seed'
+import type { Article, Expert, Podcast, SubscriptionPlan, WellnessTip,} from './seed'
 
 /* -------------------------------------------------------------------------- */
 /*  Public record types (unchanged from the SQL era — these are the API      */
@@ -127,12 +121,28 @@ interface MediaProgressDoc {
   updatedAt: Date
 }
 
-
 interface LikeDoc {
   _id: string          // `${userId}:${contentType}:${contentId}`
   userId: string
   contentType: 'article' | 'podcast' | 'blog' | 'video'
   contentId: string
+  createdAt: Date
+}
+
+interface BlogDoc {
+  _id: number
+  title: string
+  desc: string
+  cat: string
+  read: string
+  date: string
+  featured: boolean
+  color: string
+  textColor: string
+  authorName: string
+  specialist: string
+  imageUrl: string
+  sections: Array<{ heading: string; items: string[] }>
   createdAt: Date
 }
 
@@ -164,13 +174,16 @@ function appMetaCol(): Collection<AppMetaDoc> {
   return getDb().collection<AppMetaDoc>(Collections.appMeta)
 }
 
-
 function mediaProgressCol(): Collection<MediaProgressDoc> {
   return getDb().collection<MediaProgressDoc>(Collections.mediaProgress)
 }
 
 function likesCol(): Collection<LikeDoc> {
   return getDb().collection<LikeDoc>('likes')
+}
+
+function blogsCol(): Collection<BlogDoc> {
+  return getDb().collection<BlogDoc>('blogs')
 }
 
 /* -------------------------------------------------------------------------- */
@@ -263,22 +276,24 @@ function docToUser(d: UserDoc): UserRecord {
   }
 }
 
-export interface MediaProgressRecord {
-  mediaId: string
-  userId: string
-  kind: 'audio' | 'video'
-  positionSec: number
-  durationSec?: number
-  updatedAt: string
+function docToBlog(d: BlogDoc): BlogRecord {
+  return {
+    id: d._id,
+    title: d.title,
+    desc: d.desc,
+    cat: d.cat,
+    read: d.read,
+    date: d.date,
+    featured: d.featured,
+    color: d.color,
+    textColor: d.textColor,
+    authorName: d.authorName,
+    specialist: d.specialist,
+    imageUrl: d.imageUrl,
+    sections: d.sections,
+    createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+  }
 }
-
-export interface LikeRecord {
-  userId: string
-  contentType: 'article' | 'podcast' | 'blog' | 'video'
-  contentId: string
-  createdAt: string
-}
-
 
 function docToMediaProgress(d: MediaProgressDoc): MediaProgressRecord {
   return {
@@ -299,6 +314,43 @@ function docToLike(d: LikeDoc): LikeRecord {
     createdAt: d.createdAt.toISOString(),
   }
 }
+
+export interface MediaProgressRecord {
+  mediaId: string
+  userId: string
+  kind: 'audio' | 'video'
+  positionSec: number
+  durationSec?: number
+  updatedAt: string
+}
+
+export interface LikeRecord {
+  userId: string
+  contentType: 'article' | 'podcast' | 'blog' | 'video'
+  contentId: string
+  createdAt: string
+}
+
+export interface BlogRecord {
+  id: number
+  title: string
+  desc: string
+  cat: string
+  read: string
+  date: string
+  featured: boolean
+  color: string
+  textColor: string
+  authorName: string
+  specialist: string
+  imageUrl: string
+  sections: Array<{ heading: string; items: string[] }>
+  createdAt: string
+}
+
+
+
+
 
 /* -------------------------------------------------------------------------- */
 /*  Articles                                                                  */
@@ -389,49 +441,49 @@ export const articleRepo = {
       .toArray()
     return docs.map(docToArticle)
   },
-  async listBlogs(options?: {
-    featured?: boolean
-    category?: string
-    sort?: 'latest' | 'popular'
-    limit?: number
-  }): Promise<Article[]> {
-    const query: {
-      articleStatus: 'published'
-      isFeatured?: boolean
-      categoryLabel?: string
-    } = { articleStatus: 'published' }
-    if (options?.featured !== undefined) query.isFeatured = options.featured
-    if (options?.category) query.categoryLabel = options.category
+  // async listBlogs(options?: {
+  //   featured?: boolean
+  //   category?: string
+  //   sort?: 'latest' | 'popular'
+  //   limit?: number
+  // }): Promise<Article[]> {
+  //   const query: {
+  //     articleStatus: 'published'
+  //     isFeatured?: boolean
+  //     categoryLabel?: string
+  //   } = { articleStatus: 'published' }
+  //   if (options?.featured !== undefined) query.isFeatured = options.featured
+  //   if (options?.category) query.categoryLabel = options.category
 
-    const docs = await articlesCol().find(query).toArray()
-    const items = docs.map(docToArticle)
+  //   const docs = await articlesCol().find(query).toArray()
+  //   const items = docs.map(docToArticle)
 
-    if (options?.sort === 'popular') {
-      items.sort((a, b) => (b.popularityScore ?? 0) - (a.popularityScore ?? 0))
-    } else {
-      items.sort((a, b) => {
-        const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0
-        const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0
-        return tb - ta
-      })
-    }
+  //   if (options?.sort === 'popular') {
+  //     items.sort((a, b) => (b.popularityScore ?? 0) - (a.popularityScore ?? 0))
+  //   } else {
+  //     items.sort((a, b) => {
+  //       const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0
+  //       const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0
+  //       return tb - ta
+  //     })
+  //   }
 
-    if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
-      return items.slice(0, Math.floor(options.limit))
-    }
-    return items
-  },
-  async listBlogCategories(): Promise<string[]> {
-    const categories = await articlesCol().distinct('categoryLabel', { articleStatus: 'published' })
-    return categories
-      .map((c) => String(c))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b))
-  },
-  async bySlug(slug: string): Promise<Article | undefined> {
-    const doc = await articlesCol().findOne({ slug, articleStatus: 'published' })
-    return doc ? docToArticle(doc) : undefined
-  },
+  //   if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  //     return items.slice(0, Math.floor(options.limit))
+  //   }
+  //   return items
+  // },
+  // async listBlogCategories(): Promise<string[]> {
+  //   const categories = await articlesCol().distinct('categoryLabel', { articleStatus: 'published' })
+  //   return categories
+  //     .map((c) => String(c))
+  //     .filter(Boolean)
+  //     .sort((a, b) => a.localeCompare(b))
+  // },
+  // async bySlug(slug: string): Promise<Article | undefined> {
+  //   const doc = await articlesCol().findOne({ slug, articleStatus: 'published' })
+  //   return doc ? docToArticle(doc) : undefined
+  // },
 }
 
 /* -------------------------------------------------------------------------- */
@@ -914,4 +966,52 @@ export const likesRepo = {
 
   return likesCol().aggregate(pipeline).toArray()
 }
+}
+
+
+
+/* -------------------------------------------------------------------------- */
+/*  blog repo                                                        */
+/* -------------------------------------------------------------------------- */
+export const blogRepo = {
+  async list(): Promise<BlogRecord[]> {
+    const docs = await blogsCol().find({}).sort({ _id: -1 }).toArray()
+    return docs.map(docToBlog)
+  },
+
+  async byId(id: number): Promise<BlogRecord | undefined> {
+    const doc = await blogsCol().findOne({ _id: id })
+    return doc ? docToBlog(doc) : undefined
+  },
+
+  async create(data: Omit<BlogRecord, 'id' | 'createdAt'>): Promise<BlogRecord> {
+    const _id = await nextId('blogs')
+    const doc: BlogDoc = {
+      _id,
+      title: data.title,
+      desc: data.desc,
+      cat: data.cat,
+      read: data.read,
+      date: data.date,
+      featured: data.featured,
+      color: data.color,
+      textColor: data.textColor,
+      authorName: data.authorName,
+      specialist: data.specialist,
+      imageUrl: data.imageUrl,
+      sections: data.sections,
+      createdAt: new Date(),
+    }
+    await blogsCol().insertOne(doc)
+    return docToBlog(doc)
+  },
+
+  async remove(id: number): Promise<boolean> {
+    const result = await blogsCol().deleteOne({ _id: id })
+    return result.deletedCount > 0
+  },
+
+  async count(): Promise<number> {
+    return blogsCol().countDocuments({})
+  },
 }

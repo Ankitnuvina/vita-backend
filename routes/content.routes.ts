@@ -10,9 +10,6 @@ const router = Router()
 router.use(requireAuth)
 
 router.get('/articles', contentController.listArticles)
-router.get('/blogs', contentController.listBlogs)
-router.get('/blogs/categories', contentController.listBlogCategories)
-router.get('/blogs/:slug', contentController.getBlogBySlug)
 router.get('/podcasts', contentController.listPodcasts)
 router.get('/experts', contentController.listExperts)
 router.get('/experts/:id', contentController.getExpertById)
@@ -28,9 +25,8 @@ router.delete('/media/progress/:mediaId', mediaController.clearMediaProgress)
 
 
 router.post('/likes/batch', likesController.getBatchLikeStatus)
-
 router.get('/likes/me', requireAuth, likesController.getMyLikes)
-router.get('/likes/:contentType/:contentId', likesController.getLikeStatus)  // public
+router.get('/likes/:contentType/:contentId', likesController.getLikeStatus)
 router.post('/likes/:contentType/:contentId', requireAuth, likesController.toggleLike)
 
 export { router as contentRouter }
