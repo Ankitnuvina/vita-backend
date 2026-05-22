@@ -1,47 +1,56 @@
-// src/parsers/extractSections.ts — shared helper
 export function extractSections(rawText: string) {
   const lines = rawText
     .split('\n')
-    .map((l) => l.trim())
+    .map(l => l.trim())
     .filter(Boolean)
 
-  // Pehli line title hogi
-  const title = lines[0] || 'Untitled Blog'
+  const isMetaLine = (line: string) => /^(Author|Specialist|Read\s*Time|Published|Category)\s*:/i.test(line) || /📅|⏱|✍️|🔄/.test(line)
+
+  let title = 'Untitled Blog'
+  let titleIndex = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!isMetaLine(line) && line.length >= 10 && !line.startsWith('⚡') && !line.startsWith('🩺')) {
+      title = line.replace(/^#+\s*/, '').trim()
+      titleIndex = i
+      break
+    }
+  }
 
   const sections: { heading: string; items: string[] }[] = []
   let currentHeading = 'Overview'
   let currentItems: string[] = []
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = titleIndex + 1; i < lines.length; i++) {
     const line = lines[i]
 
-    // Heading detect karo — short lines (under 80 chars) jo sentence nahi hain
+    if (isMetaLine(line)) continue
+
     const isHeading =
-      line.length < 80 &&
+      line.length < 90 &&
       !line.endsWith('.') &&
       !line.endsWith(',') &&
-      line === line.replace(/[.,:;]$/, '') &&
-      (line.startsWith('#') || /^[A-Z]/.test(line) || /^\d+\./.test(line))
+      (line.startsWith('#') || /^[A-Z]/.test(line) || /^\d+[\.\)]/.test(line)) &&
+      !line.includes(':')
 
     if (isHeading) {
       if (currentItems.length > 0) {
         sections.push({ heading: currentHeading, items: currentItems })
       }
-      currentHeading = line.replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '')
+      currentHeading = line.replace(/^#+\s*/, '').replace(/^\d+[\.\)]\s*/, '').trim()
       currentItems = []
-    } else if (line.length > 20) {
+    } else if (line.length > 15) {
       currentItems.push(line)
     }
   }
 
-  // Last section push karo
   if (currentItems.length > 0) {
     sections.push({ heading: currentHeading, items: currentItems })
   }
 
-  // Agar koi section nahi mila
   if (sections.length === 0) {
-    sections.push({ heading: 'Content', items: lines.slice(1, 20) })
+    sections.push({ heading: 'Content', items: lines.slice(titleIndex + 1, titleIndex + 20) })
   }
 
   return { title, sections }

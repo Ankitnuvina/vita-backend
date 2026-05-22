@@ -9,23 +9,15 @@ import { errorHandler } from './middleware/errorHandler'
 import { adminRouter } from './routes/admin.routes'
 import { authRouter } from './routes/auth.routes'
 import { contentRouter } from './routes/content.routes'
-
 import { blogRouter } from './routes/blog.routes'
-
 import path from 'path'
 
 const app = express()
-
 app.set('trust proxy', 1)
 
-// Helmet first, but relax Cross-Origin-Resource-Policy so that uploaded
-// images / videos served from /uploads can be loaded by the SPA frontend
-// (different origin/port) via <img>, <video>, fetch, canvas, etc.
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  })
-)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
+
+app.use(helmet({crossOriginResourcePolicy: { policy: 'cross-origin' },}))
 app.use(express.json({ limit: '256kb' }))
 app.use(cookieParser())
 app.use(
@@ -39,12 +31,7 @@ app.use(
     credentials: true,
   })
 )
-
-// Serve uploaded files. Explicit CORP header here as a safety net in case
-// helmet is reconfigured later. maxAge gives basic browser caching.
-app.use(
-  '/uploads',
-  (_req, res, next) => {
+app.use('/uploads', (_req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
     next()
   },
@@ -54,12 +41,9 @@ app.use(
   })
 )
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', env: config.nodeEnv })
-})
+app.get('/api/health', (_req, res) => { res.json({ status: 'ok', env: config.nodeEnv })})
 
-app.use('/api', blogRouter) 
-
+app.use('/api', blogRouter)
 app.use('/api/auth', authRouter)
 app.use('/api', contentRouter)
 app.use('/api/admin', adminRouter)

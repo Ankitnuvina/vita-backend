@@ -6,7 +6,6 @@ import { parseTxt } from '@/documentsTypes/parsers/parseTxt'
 import { parseXlsx } from '@/documentsTypes/parsers/parseXlsx'
 import { blogRepo } from '@/data/store'
 import { logger } from '../logger'
-// import path from 'path'
 
 
 // GET /api/blogs
@@ -44,7 +43,16 @@ export const uploadBlog: RequestHandler = async (req, res, next) => {
     const mimeType = req.file.mimetype
 
     try {
-        let parsed: { title: string; sections: { heading: string; items: string[] }[] }
+        let parsed: {
+            title: string
+            sections: { heading: string; items: string[] }[]
+            authorName?: string
+            specialist?: string
+            read?: string
+            date?: string
+            cat?: string
+            imageUrl?: string
+        }
 
         if (mimeType === 'application/pdf') {
             parsed = await parsePdf(filePath)
@@ -56,27 +64,25 @@ export const uploadBlog: RequestHandler = async (req, res, next) => {
             parsed = await parseTxt(filePath)
         }
 
-        // 2. Blog object banao
         const blog = await blogRepo.create({
             title: parsed.title || req.file.originalname,
             desc: parsed.sections[0]?.items[0]?.slice(0, 200) || '',
-            cat: (req.body.cat as string) || 'General',
-            read: `${Math.max(1, Math.ceil(parsed.sections.length * 1.5))} min`,
-            date: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+            cat: parsed.cat || (req.body.cat as string) || 'General',
+            read: parsed.read || (req.body.read as string) || '5 min',
+            date: parsed.date || (req.body.date as string) || new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+            authorName: parsed.authorName || (req.body.authorName as string) || 'Vitalize Team',
+            specialist: parsed.specialist || (req.body.specialist as string) || 'Health Writer',
+            imageUrl: parsed.imageUrl || (req.body.imageUrl as string) || '',
             featured: false,
             color: '#E1F5EE',
             textColor: '#0F6E56',
-            authorName: (req.body.authorName as string) || 'Vitalize Team',
-            specialist: (req.body.specialist as string) || 'Health Writer',
-            imageUrl: (req.body.imageUrl as string) || '',
             sections: parsed.sections,
         })
 
-        // 3. Uploaded file delete karo (data DB mein save ho gayi)
         await fs.unlink(filePath).catch(() => { })
-
-        logger.info(`[BlogController] Blog created from upload: id=${blog.id}`)
+        logger.info(`[BlogController] Blog created: id=${blog.id}, author=${blog.authorName}`)
         res.status(201).json(blog)
+
     } catch (err) {
         await fs.unlink(filePath).catch(() => { })
         next(err)
