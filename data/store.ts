@@ -3,6 +3,10 @@ import { Collections, getDb, nextId } from '../db/adapter'
 import type { UserRole } from '../types'
 import type { Article, Expert, Podcast, SubscriptionPlan, WellnessTip,} from './seed'
 
+// import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
+// import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
+import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
+
 /* -------------------------------------------------------------------------- */
 /*  Public record types (unchanged from the SQL era — these are the API      */
 /*  contracts the controllers + frontend rely on)                            */
@@ -142,10 +146,9 @@ interface BlogDoc {
   authorName: string
   specialist: string
   imageUrl: string
-  sections: Array<{ heading: string; items: string[] }>
+  sections: Array<{ heading: string; items: SectionItem[] }>  // ← was string[]
   createdAt: Date
 }
-
 
 
 /* -------------------------------------------------------------------------- */
@@ -276,6 +279,7 @@ function docToUser(d: UserDoc): UserRecord {
   }
 }
 
+
 function docToBlog(d: BlogDoc): BlogRecord {
   return {
     id: d._id,
@@ -344,7 +348,7 @@ export interface BlogRecord {
   authorName: string
   specialist: string
   imageUrl: string
-  sections: Array<{ heading: string; items: string[] }>
+  sections: Array<{ heading: string; items: SectionItem[] }>  // ← was string[]
   createdAt: string
 }
 

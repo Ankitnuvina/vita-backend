@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { createRequire } from 'module'
 import { extractSections } from './extractSections'
+import type { SectionItem } from './sectionTypes'
 
 
 const require = createRequire(import.meta.url)
@@ -15,7 +16,7 @@ export interface PdfMeta {
   read: string
   date: string
   cat: string
-  sections: { heading: string; items: string[] }[]
+  sections: { heading: string; items: SectionItem[] }[] 
   imageUrl: string
 }
 
