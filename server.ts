@@ -10,6 +10,7 @@ import { adminRouter } from './routes/admin.routes'
 import { authRouter } from './routes/auth.routes'
 import { contentRouter } from './routes/content.routes'
 import { blogRouter } from './routes/blog.routes'
+import { commentsRouter } from './routes/comments.routes'
 import path from 'path'
 
 const app = express()
@@ -43,12 +44,14 @@ app.use('/uploads', (_req, res, next) => {
 
 app.get('/api/health', (_req, res) => { res.json({ status: 'ok', env: config.nodeEnv })})
 
-app.use('/api', blogRouter)
 app.use('/api/auth', authRouter)
-app.use('/api', contentRouter)
+
+
+app.use('/api/comments', commentsRouter)
 app.use('/api/admin', adminRouter)
 
-
+app.use('/api', blogRouter)
+app.use('/api', contentRouter)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found', path: req.path })

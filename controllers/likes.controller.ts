@@ -76,8 +76,6 @@ export const getMyLikes: RequestHandler = async (req, res, next) => {
   }
 }
 
-
-
 export const getBatchLikeStatus: RequestHandler = async (req, res, next) => {
   const { contentType, contentIds } = req.body as {
     contentType: string

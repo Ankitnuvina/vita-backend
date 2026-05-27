@@ -2,9 +2,6 @@ import type { Collection } from 'mongodb'
 import { Collections, getDb, nextId } from '../db/adapter'
 import type { UserRole } from '../types'
 import type { Article, Expert, Podcast, SubscriptionPlan, WellnessTip,} from './seed'
-
-// import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
-// import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
 import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
 
 /* -------------------------------------------------------------------------- */
@@ -126,11 +123,21 @@ interface MediaProgressDoc {
 }
 
 interface LikeDoc {
-  _id: string          // `${userId}:${contentType}:${contentId}`
+  _id: string
   userId: string
   contentType: 'article' | 'podcast' | 'blog' | 'video'
   contentId: string
   createdAt: Date
+}
+
+interface CommentDoc {
+  _id: string
+  userId: string
+  contentType: 'article' | 'podcast' | 'blog' | 'video'
+  contentId: string
+  text: string
+  createdAt: Date
+  updatedAt?: Date
 }
 
 interface BlogDoc {
@@ -181,9 +188,24 @@ function mediaProgressCol(): Collection<MediaProgressDoc> {
   return getDb().collection<MediaProgressDoc>(Collections.mediaProgress)
 }
 
-function likesCol(): Collection<LikeDoc> {
-  return getDb().collection<LikeDoc>('likes')
+// function likesCol(): Collection<LikeDoc> {
+//   return getDb().collection<LikeDoc>('likes')
+// }
+
+// function commentsCol(): Collection<CommentDoc> {
+//   return getDb().collection<CommentDoc>('comments')
+// }
+
+// ✅ Registry se
+function commentsCol() {
+  return getDb().collection<CommentDoc>(Collections.comments)
 }
+
+// Same for likes
+function likesCol() {
+  return getDb().collection<LikeDoc>(Collections.likes)
+}
+
 
 function blogsCol(): Collection<BlogDoc> {
   return getDb().collection<BlogDoc>('blogs')
@@ -319,6 +341,19 @@ function docToLike(d: LikeDoc): LikeRecord {
   }
 }
 
+function docToComment(d: CommentDoc & { userName?: string }): CommentRecord {
+  return {
+    id: d._id,
+    userId: d.userId,
+    userName: d.userName ?? '',
+    contentType: d.contentType,
+    contentId: d.contentId,
+    text: d.text,
+    createdAt: d.createdAt.toISOString(),
+    updatedAt: d.updatedAt?.toISOString(),
+  }
+}
+
 export interface MediaProgressRecord {
   mediaId: string
   userId: string
@@ -333,6 +368,17 @@ export interface LikeRecord {
   contentType: 'article' | 'podcast' | 'blog' | 'video'
   contentId: string
   createdAt: string
+}
+
+export interface CommentRecord {
+  id: string
+  userId: string
+  userName: string
+  contentType: 'article' | 'podcast' | 'blog' | 'video'
+  contentId: string
+  text: string
+  createdAt: string
+  updatedAt?: string
 }
 
 export interface BlogRecord {
@@ -1017,5 +1063,171 @@ export const blogRepo = {
 
   async count(): Promise<number> {
     return blogsCol().countDocuments({})
+  },
+}
+
+
+
+
+
+///////////////////////////////////////////////////////////
+export const commentsRepo = {
+
+  // Comment add karo
+  async add(
+    userId: string,
+    contentType: CommentRecord['contentType'],
+    contentId: string,
+    text: string
+  ): Promise<CommentRecord> {
+    const { ObjectId } = await import('mongodb')
+    const _id = new ObjectId().toHexString()
+
+    const doc: CommentDoc = {
+      _id,
+      userId,
+      contentType,
+      contentId,
+      text: text.trim(),
+      createdAt: new Date(),
+    }
+
+    await commentsCol().insertOne(doc)
+
+    // userName fetch karo
+    const user = await getDb()
+      .collection<{ _id: string; username: string }>('users')
+      .findOne({ _id: userId })
+
+    return docToComment({ ...doc, userName: user?.username ?? '' })
+  },
+
+  // Paginated comments list with userName.
+  //
+  // Previously this used an aggregation pipeline with $lookup + $unwind, but
+  // the $unwind option was misspelled (`preserveNullAndEmpty` instead of
+  // `preserveNullAndEmptyArrays`), which MongoDB silently ignores. Result:
+  // any comment whose author lookup returned no document was DROPPED from the
+  // list — count would still show 2 (countDocuments doesn't lookup), but the
+  // list came back empty. Exactly the "count shows, comments don't" bug.
+  //
+  // The simpler `find` + batched user lookup below is also faster on small
+  // pages, sidesteps the typo entirely, and degrades gracefully when an
+  // author record is missing (the comment still appears with userName = 'User').
+  async list(
+    contentType: CommentRecord['contentType'],
+    contentId: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<{ comments: CommentRecord[]; total: number }> {
+    const filter = { contentType, contentId }
+    const skip = (page - 1) * pageSize
+
+    const [docs, total] = await Promise.all([
+      commentsCol()
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .toArray(),
+      commentsCol().countDocuments(filter),
+    ])
+
+    // Batch-fetch every author for this page in a single query.
+    const uniqueUserIds = Array.from(new Set(docs.map((d) => d.userId)))
+    const userMap = new Map<string, string>()
+    if (uniqueUserIds.length > 0) {
+      const users = await getDb()
+        .collection<{ _id: string; username: string }>(Collections.users)
+        .find({ _id: { $in: uniqueUserIds } }, { projection: { username: 1 } })
+        .toArray()
+      for (const u of users) userMap.set(u._id, u.username)
+    }
+
+    return {
+      comments: docs.map((d) =>
+        docToComment({ ...d, userName: userMap.get(d.userId) ?? 'User' })
+      ),
+      total,
+    }
+  },
+
+  // Single comment fetch (ownership check ke liye)
+  async findById(commentId: string): Promise<CommentDoc | null> {
+    return commentsCol().findOne({ _id: commentId }) 
+  },
+
+  // Comment edit — sirf owner kar sakta hai
+  async update(
+    commentId: string,
+    userId: string,
+    text: string
+  ): Promise<CommentRecord | null> {
+    const existing = await commentsCol().findOne({ _id: commentId })
+
+    if (!existing) return null
+    if (existing.userId !== userId) throw new Error('FORBIDDEN')
+
+    const updatedAt = new Date()
+    await commentsCol().updateOne(
+      { _id: commentId },
+      { $set: { text: text.trim(), updatedAt } }
+    )
+
+    const user = await getDb()
+      .collection<{ _id: string; username: string }>('users')
+      .findOne({ _id: userId })
+
+    return docToComment({ ...existing, text: text.trim(), updatedAt, userName: user?.username ?? '' })
+  },
+
+  // Comment delete — sirf owner kar sakta hai
+  async remove(commentId: string, userId: string): Promise<'deleted' | 'forbidden' | 'notfound'> {
+    const existing = await commentsCol().findOne({ _id: commentId })
+    if (!existing) return 'notfound'
+    if (existing.userId !== userId) return 'forbidden'
+
+    await commentsCol().deleteOne({ _id: commentId })
+    return 'deleted'
+  },
+
+  // Count
+  async getCount(
+    contentType: CommentRecord['contentType'],
+    contentId: string
+  ): Promise<number> {
+    return commentsCol().countDocuments({ contentType, contentId })
+  },
+
+  // Multiple content items ke counts ek saath
+async getCounts(
+  contentType: CommentRecord['contentType'],
+  contentIds: string[]
+): Promise<Record<string, number>> {
+  const docs = await commentsCol()
+    .aggregate([
+      { $match: { contentType, contentId: { $in: contentIds } } },
+      { $group: { _id: '$contentId', count: { $sum: 1 } } },
+    ])
+    .toArray()
+
+  // Sabko 0 se initialize karo
+  const result: Record<string, number> = {}
+  for (const id of contentIds) result[id] = 0
+
+  // Jo counts mile woh fill karo
+  for (const doc of docs) {
+    result[doc._id as string] = doc.count as number
+  }
+  return result
+},
+
+  // Admin ke liye — content ki saari comments delete karo
+  async removeByContent(
+    contentType: CommentRecord['contentType'],
+    contentId: string
+  ): Promise<number> {
+    const result = await commentsCol().deleteMany({ contentType, contentId })
+    return result.deletedCount
   },
 }
