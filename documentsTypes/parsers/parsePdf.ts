@@ -16,7 +16,7 @@ export interface PdfMeta {
   read: string
   date: string
   cat: string
-  sections: { heading: string; items: SectionItem[] }[] 
+  sections: { heading: string; items: SectionItem[] }[]
   imageUrl: string
 }
 
@@ -74,7 +74,7 @@ export async function parsePdf(filePath: string): Promise<PdfMeta> {
           recursive: true,
           force: true,
         })
-        .catch(() => {})
+        .catch(() => { })
     }
   } catch {
     imageUrl = ''
@@ -111,10 +111,6 @@ export async function parsePdf(filePath: string): Promise<PdfMeta> {
   let cat = 'General'
 
   let metaEndIndex = 0
-
-  // ─────────────────────────────────────────────────────────────
-  // 4. Read metadata from first lines
-  // ─────────────────────────────────────────────────────────────
 
   for (let i = 0; i < Math.min(10, lines.length); i++) {
     const line = lines[i]

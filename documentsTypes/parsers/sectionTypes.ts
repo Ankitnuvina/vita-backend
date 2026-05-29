@@ -16,7 +16,6 @@ export interface TableItem {
 
 export interface HeadingItem {
   type: 'heading'
-  /** 2 = main sub-heading, 3 = nested, 4+ = deeper */
   level: 2 | 3 | 4 | 5 | 6
   text: string
 }

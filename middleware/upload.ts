@@ -4,20 +4,30 @@ import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
 
-const uploadPath = path.join(process.cwd(), 'uploads')
+const UPLOAD_ROOT = path.join(process.cwd(), 'uploads')
+const IMAGE_DIR = path.join(UPLOAD_ROOT, 'uploadsArticlesImages')
+const VIDEO_DIR = path.join(UPLOAD_ROOT, 'uploadsPodcastsVideos')
 
-if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath, { recursive: true })
+for (const dir of [UPLOAD_ROOT, IMAGE_DIR, VIDEO_DIR]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
-/**
- * Build a safe, collision-resistant file name:
- *   <timestamp>-<random>-<sanitized-original>.<ext>
- *
- * - strips path separators / weird chars
- * - keeps the original extension lowercased
- * - hard-caps the base name length so we never blow past Windows / fs limits
- */
+const imageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, IMAGE_DIR),
+  filename: (_req, file, cb) => cb(null, buildFilename(file.originalname)),
+})
+
+const videoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, VIDEO_DIR),
+  filename: (_req, file, cb) => cb(null, buildFilename(file.originalname)),
+})
+
+const generalStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_ROOT),
+  filename: (_req, file, cb) => cb(null, buildFilename(file.originalname)),
+})
+
+
 function buildFilename(originalName: string): string {
   const ext = path.extname(originalName).toLowerCase()
   const base = path
@@ -29,70 +39,35 @@ function buildFilename(originalName: string): string {
   return `${Date.now()}-${rand}-${base}${ext}`
 }
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadPath)
-  },
-  filename: (_req, file, cb) => {
-    cb(null, buildFilename(file.originalname))
-  },
-})
-
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
 
 export const upload = multer({
-  storage,
-  limits: {
-    fileSize: 200 * 1024 * 1024, // 200MB
-  },
+  storage: generalStorage,
+  limits: { fileSize: 200 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [...IMAGE_TYPES, ...VIDEO_TYPES]
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error(`File type not allowed: ${file.mimetype}`))
-    }
+    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error(`File type not allowed: ${file.mimetype}`))
   },
 })
 
 export const uploadImage = multer({
-  storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-  },
+  storage: imageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (IMAGE_TYPES.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error(`Only image files allowed (${IMAGE_TYPES.join(', ')})`))
-    }
+    IMAGE_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error(`Only image files allowed`))
   },
 })
 
 export const uploadVideo = multer({
-  storage,
-  limits: {
-    fileSize: 200 * 1024 * 1024, // 200MB
-  },
+  storage: videoStorage,
+  limits: { fileSize: 200 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (VIDEO_TYPES.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error(`Only video files allowed (${VIDEO_TYPES.join(', ')})`))
-    }
+    VIDEO_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error(`Only video files allowed`))
   },
 })
 
-/**
- * Wrap a multer middleware so that multer / fileFilter errors are converted
- * to a clean JSON 400 response instead of bubbling up to the global error
- * handler as a generic 500.
- *
- *   router.post('/upload-image',
- *     handleUpload(uploadImage.single('image')),
- *     (req, res) => { ... })
- */
+
 export function handleUpload(mw: RequestHandler): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     mw(req, res, (err: unknown) => {

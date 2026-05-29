@@ -6,18 +6,6 @@ let client: MongoClient | null = null
 let cachedDb: Db | null = null
 
 
-// export async function connectDb(): Promise<Db> {
-//   if (cachedDb) return cachedDb
-//   client = new MongoClient(config.mongoUri, {
-//     // Reasonable defaults for a small-to-medium service. Tune as needed.
-//     maxPoolSize: 20,
-//     serverSelectionTimeoutMS: 10_000,
-//   })
-//   await client.connect()
-//   cachedDb = client.db(config.mongoDb)
-//   logger.debug(`[db] Connected to MongoDB (db=${config.mongoDb})`)
-//   return cachedDb
-// }
 export async function connectDb(): Promise<Db> {
   if (cachedDb) return cachedDb
 
@@ -30,7 +18,6 @@ export async function connectDb(): Promise<Db> {
   cachedDb = client.db(config.mongoDb)
   logger.debug(`[db] Connected to MongoDB (db=${config.mongoDb})`)
 
-  // Indexes ensure karo — idempotent hai, safe to run on every startup
   await ensureIndexes(cachedDb)
 
   return cachedDb
@@ -38,13 +25,11 @@ export async function connectDb(): Promise<Db> {
 
 async function ensureIndexes(db: Db): Promise<void> {
   await Promise.all([
-    // Comments indexes
     db.collection(Collections.comments).createIndexes([
-      { key: { contentType: 1, contentId: 1, createdAt: -1 } }, // list query
-      { key: { userId: 1 } },                                    // user ke comments
+      { key: { contentType: 1, contentId: 1, createdAt: -1 } },
+      { key: { userId: 1 } },
     ]),
 
-    // Likes indexes (agar nahi laga rakhe toh)
     db.collection(Collections.likes).createIndexes([
       { key: { contentType: 1, contentId: 1 } },
       { key: { userId: 1 } },
@@ -83,8 +68,7 @@ export const Collections = {
   mediaProgress: 'media_progress',
   counters: 'counters',
   blogs: 'blogs',
-
-  likes: 'likes',       // ← already use ho raha tha
+  likes: 'likes',
   comments: 'comments',
 } as const
 

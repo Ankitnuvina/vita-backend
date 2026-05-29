@@ -121,11 +121,6 @@ export const getBatchCommentCount: RequestHandler = async (req, res, next) => {
 }
 
 
-
-
-
-
-
 // PUT /api/comments/:commentId
 export const editComment: RequestHandler = async (req, res, next) => {
   if (!req.user) {
@@ -191,7 +186,3 @@ export const deleteComment: RequestHandler = async (req, res, next) => {
     next(err)
   }
 }
-
-
-
-// test the backend 

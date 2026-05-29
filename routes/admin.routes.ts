@@ -1,28 +1,18 @@
 import { Router } from 'express'
-import {
-  articleHandlers,
-  expertHandlers,
-  getStats,
-  podcastHandlers,
-  tipHandlers,
-  getLikesAnalytics 
-} from '../controllers/admin.controller'
+import { articleHandlers, expertHandlers, getStats, podcastHandlers, tipHandlers, getLikesAnalytics} from '../controllers/admin.controller'
 import { requireAdmin } from '../middleware/requireAdmin'
 import { requireAuth } from '../middleware/requireAuth'
-
 import { handleUpload, uploadImage, uploadVideo } from '@/middleware/upload'
 import { config } from '../config'
 
 const router = Router()
-
 router.use(requireAuth, requireAdmin)
-
 router.get('/stats', getStats)
 
-
-function buildAssetUrl(req: import('express').Request, filename: string): string {
+function buildAssetUrl(req: import('express').Request, filename: string, type: 'image' | 'video'): string {
   const base = config.appUrl || `${req.protocol}://${req.get('host')}`
-  return `${base}/uploads/${filename}`
+  const subfolder = type === 'image' ? 'uploadsArticlesImages' : 'uploadsPodcastsVideos'
+  return `${base}/uploads/${subfolder}/${filename}`
 }
 
 // Image upload
@@ -35,7 +25,7 @@ router.post(
       return
     }
     res.status(201).json({
-      imageUrl: buildAssetUrl(req, req.file.filename),
+      imageUrl: buildAssetUrl(req, req.file.filename, 'image'),
       filename: req.file.filename,
       size: req.file.size,
       mimetype: req.file.mimetype,
@@ -53,7 +43,7 @@ router.post(
       return
     }
     res.status(201).json({
-      videoUrl: buildAssetUrl(req, req.file.filename),
+      videoUrl: buildAssetUrl(req, req.file.filename, 'video'),
       filename: req.file.filename,
       size: req.file.size,
       mimetype: req.file.mimetype,

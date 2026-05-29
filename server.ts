@@ -43,9 +43,7 @@ app.use('/uploads', (_req, res, next) => {
 )
 
 app.get('/api/health', (_req, res) => { res.json({ status: 'ok', env: config.nodeEnv })})
-
 app.use('/api/auth', authRouter)
-
 
 app.use('/api/comments', commentsRouter)
 app.use('/api/admin', adminRouter)

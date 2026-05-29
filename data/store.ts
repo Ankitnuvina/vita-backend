@@ -1,13 +1,8 @@
 import type { Collection } from 'mongodb'
 import { Collections, getDb, nextId } from '../db/adapter'
 import type { UserRole } from '../types'
-import type { Article, Expert, Podcast, SubscriptionPlan, WellnessTip,} from './seed'
+import type { Article, Expert, Podcast, SubscriptionPlan, WellnessTip, } from './seed'
 import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
-
-/* -------------------------------------------------------------------------- */
-/*  Public record types (unchanged from the SQL era — these are the API      */
-/*  contracts the controllers + frontend rely on)                            */
-/* -------------------------------------------------------------------------- */
 
 export interface UserRecord {
   userId: string
@@ -16,14 +11,6 @@ export interface UserRecord {
   passwordHash: string
   createdAt: string
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Internal MongoDB document shapes                                          */
-/*                                                                           */
-/*  Numeric resources (articles/podcasts/experts/tips) use the integer id   */
-/*  as `_id` directly, preserving the `id: number` API surface and giving   */
-/*  us the primary index for free.                                          */
-/* -------------------------------------------------------------------------- */
 
 interface ArticleDoc {
   _id: number
@@ -158,9 +145,7 @@ interface BlogDoc {
 }
 
 
-/* -------------------------------------------------------------------------- */
-/*  Collection accessors                                                      */
-/* -------------------------------------------------------------------------- */
+// Collection accessors 
 
 function articlesCol(): Collection<ArticleDoc> {
   return getDb().collection<ArticleDoc>(Collections.articles)
@@ -188,32 +173,19 @@ function mediaProgressCol(): Collection<MediaProgressDoc> {
   return getDb().collection<MediaProgressDoc>(Collections.mediaProgress)
 }
 
-// function likesCol(): Collection<LikeDoc> {
-//   return getDb().collection<LikeDoc>('likes')
-// }
-
-// function commentsCol(): Collection<CommentDoc> {
-//   return getDb().collection<CommentDoc>('comments')
-// }
-
-// ✅ Registry se
 function commentsCol() {
   return getDb().collection<CommentDoc>(Collections.comments)
 }
 
-// Same for likes
 function likesCol() {
   return getDb().collection<LikeDoc>(Collections.likes)
 }
-
 
 function blogsCol(): Collection<BlogDoc> {
   return getDb().collection<BlogDoc>('blogs')
 }
 
-/* -------------------------------------------------------------------------- */
 /*  Document → API mappers (preserve every output field exactly)             */
-/* -------------------------------------------------------------------------- */
 
 function docToArticle(d: ArticleDoc): Article {
   return {
@@ -256,14 +228,14 @@ function docToPodcast(d: PodcastDoc): Podcast {
   }
 }
 
-function docToExpert(d: ExpertDoc): Expert {
+function docToExpert(d: ExpertDoc & { articleCount?: number }): Expert {
   return {
     id: d._id,
     name: d.name,
     role: d.role,
     credentials: d.credentials,
     bio: typeof d.bio === 'string' ? d.bio : '',
-    articleCount: d.articleCount,
+    articleCount: d.articleCount ?? 0,
     imageUrl: d.imageUrl,
   }
 }
@@ -397,10 +369,6 @@ export interface BlogRecord {
   sections: Array<{ heading: string; items: SectionItem[] }>  // ← was string[]
   createdAt: string
 }
-
-
-
-
 
 /* -------------------------------------------------------------------------- */
 /*  Articles                                                                  */
@@ -600,12 +568,56 @@ export const podcastRepo = {
 
 export const expertRepo = {
   async list(): Promise<Expert[]> {
-    const docs = await expertsCol().find({}).sort({ _id: -1 }).toArray()
-    return docs.map(docToExpert)
+    const docs = await expertsCol()
+      .aggregate([
+        {
+          $lookup: {
+            from: 'articles',
+            localField: 'name', 
+            foreignField: 'author', 
+            as: 'articles',
+          },
+        },
+        {
+          $addFields: {
+            articleCount: { $size: '$articles' },
+          },
+        },
+        {
+          $project: {
+            articles: 0, 
+          },
+        },
+        { $sort: { _id: -1 } },
+      ])
+      .toArray()
+
+   return docs.map((d) => docToExpert(d as ExpertDoc & { articleCount?: number }))
   },
+
+  // byId mein bhi same
   async byId(id: number): Promise<Expert | undefined> {
-    const doc = await expertsCol().findOne({ _id: id })
-    return doc ? docToExpert(doc) : undefined
+    const docs = await expertsCol()
+      .aggregate([
+        { $match: { _id: id } },
+        {
+          $lookup: {
+            from: 'articles',
+            localField: 'name',
+            foreignField: 'author',
+            as: 'articles',
+          },
+        },
+        {
+          $addFields: {
+            articleCount: { $size: '$articles' },
+          },
+        },
+        { $project: { articles: 0 } },
+      ])
+      .toArray()
+
+    return docs[0] ? docToExpert(docs[0] as ExpertDoc & { articleCount?: number }) : undefined
   },
   async create(data: Omit<Expert, 'id'>): Promise<Expert> {
     const _id = await nextId('experts')
@@ -647,6 +659,7 @@ export const expertRepo = {
     return expertsCol().countDocuments({})
   },
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*  Wellness tips                                                             */
@@ -906,116 +919,116 @@ export const likesRepo = {
 
 
   async getAnalytics(filters?: {
-  user?: string
-  contentType?: string
-}) {
-  const match: Record<string, unknown> = {}
+    user?: string
+    contentType?: string
+  }) {
+    const match: Record<string, unknown> = {}
 
-  if (filters?.contentType && filters.contentType !== 'all') {
-    match.contentType = filters.contentType
-  }
+    if (filters?.contentType && filters.contentType !== 'all') {
+      match.contentType = filters.contentType
+    }
 
-  const pipeline = [
-    {
-      $match: match,
-    },
-
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'userId',
-        foreignField: '_id',
-        as: 'user',
+    const pipeline = [
+      {
+        $match: match,
       },
-    },
 
-    {
-      $unwind: '$user',
-    },
-
-    {
-      $addFields: {
-        userName: '$user.username',
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user',
+        },
       },
-    },
 
-    {
-      $match: filters?.user
-        ? {
+      {
+        $unwind: '$user',
+      },
+
+      {
+        $addFields: {
+          userName: '$user.username',
+        },
+      },
+
+      {
+        $match: filters?.user
+          ? {
             userName: {
               $regex: filters.user,
               $options: 'i',
             },
           }
-        : {},
-    },
-
-    {
-      $group: {
-        _id: {
-          contentId: '$contentId',
-          contentType: '$contentType',
-          userId: '$userId',
-        },
-
-        userName: { $first: '$userName' },
-        likedAt: { $first: '$createdAt' },
-        contentId: { $first: '$contentId' },
-        contentType: { $first: '$contentType' },
+          : {},
       },
-    },
 
-    {
-      $lookup: {
-        from: 'likes',
-        let: {
-          contentId: '$contentId',
-          contentType: '$contentType',
+      {
+        $group: {
+          _id: {
+            contentId: '$contentId',
+            contentType: '$contentType',
+            userId: '$userId',
+          },
+
+          userName: { $first: '$userName' },
+          likedAt: { $first: '$createdAt' },
+          contentId: { $first: '$contentId' },
+          contentType: { $first: '$contentType' },
         },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ['$contentId', '$$contentId'] },
-                  { $eq: ['$contentType', '$$contentType'] },
-                ],
+      },
+
+      {
+        $lookup: {
+          from: 'likes',
+          let: {
+            contentId: '$contentId',
+            contentType: '$contentType',
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$contentId', '$$contentId'] },
+                    { $eq: ['$contentType', '$$contentType'] },
+                  ],
+                },
               },
             },
-          },
-        ],
-        as: 'allLikes',
-      },
-    },
-
-    {
-      $addFields: {
-        totalLikes: {
-          $size: '$allLikes',
+          ],
+          as: 'allLikes',
         },
       },
-    },
 
-    {
-      $project: {
-        _id: 0,
-        userName: 1,
-        contentId: 1,
-        contentType: 1,
-        likedAt: 1,
-        totalLikes: 1,
+      {
+        $addFields: {
+          totalLikes: {
+            $size: '$allLikes',
+          },
+        },
       },
-    },
 
-    {
-      $sort: {
-        likedAt: -1,
+      {
+        $project: {
+          _id: 0,
+          userName: 1,
+          contentId: 1,
+          contentType: 1,
+          likedAt: 1,
+          totalLikes: 1,
+        },
       },
-    },
-  ]
 
-  return likesCol().aggregate(pipeline).toArray()
-}
+      {
+        $sort: {
+          likedAt: -1,
+        },
+      },
+    ]
+
+    return likesCol().aggregate(pipeline).toArray()
+  }
 }
 
 
@@ -1067,13 +1080,10 @@ export const blogRepo = {
 }
 
 
-
-
-
-///////////////////////////////////////////////////////////
+/* -------------------------------------------------------------------------- */
+/*  Comments repo                                                        */
+/* -------------------------------------------------------------------------- */
 export const commentsRepo = {
-
-  // Comment add karo
   async add(
     userId: string,
     contentType: CommentRecord['contentType'],
@@ -1094,7 +1104,6 @@ export const commentsRepo = {
 
     await commentsCol().insertOne(doc)
 
-    // userName fetch karo
     const user = await getDb()
       .collection<{ _id: string; username: string }>('users')
       .findOne({ _id: userId })
@@ -1102,18 +1111,6 @@ export const commentsRepo = {
     return docToComment({ ...doc, userName: user?.username ?? '' })
   },
 
-  // Paginated comments list with userName.
-  //
-  // Previously this used an aggregation pipeline with $lookup + $unwind, but
-  // the $unwind option was misspelled (`preserveNullAndEmpty` instead of
-  // `preserveNullAndEmptyArrays`), which MongoDB silently ignores. Result:
-  // any comment whose author lookup returned no document was DROPPED from the
-  // list — count would still show 2 (countDocuments doesn't lookup), but the
-  // list came back empty. Exactly the "count shows, comments don't" bug.
-  //
-  // The simpler `find` + batched user lookup below is also faster on small
-  // pages, sidesteps the typo entirely, and degrades gracefully when an
-  // author record is missing (the comment still appears with userName = 'User').
   async list(
     contentType: CommentRecord['contentType'],
     contentId: string,
@@ -1133,7 +1130,6 @@ export const commentsRepo = {
       commentsCol().countDocuments(filter),
     ])
 
-    // Batch-fetch every author for this page in a single query.
     const uniqueUserIds = Array.from(new Set(docs.map((d) => d.userId)))
     const userMap = new Map<string, string>()
     if (uniqueUserIds.length > 0) {
@@ -1152,12 +1148,10 @@ export const commentsRepo = {
     }
   },
 
-  // Single comment fetch (ownership check ke liye)
   async findById(commentId: string): Promise<CommentDoc | null> {
-    return commentsCol().findOne({ _id: commentId }) 
+    return commentsCol().findOne({ _id: commentId })
   },
 
-  // Comment edit — sirf owner kar sakta hai
   async update(
     commentId: string,
     userId: string,
@@ -1181,7 +1175,6 @@ export const commentsRepo = {
     return docToComment({ ...existing, text: text.trim(), updatedAt, userName: user?.username ?? '' })
   },
 
-  // Comment delete — sirf owner kar sakta hai
   async remove(commentId: string, userId: string): Promise<'deleted' | 'forbidden' | 'notfound'> {
     const existing = await commentsCol().findOne({ _id: commentId })
     if (!existing) return 'notfound'
@@ -1191,7 +1184,6 @@ export const commentsRepo = {
     return 'deleted'
   },
 
-  // Count
   async getCount(
     contentType: CommentRecord['contentType'],
     contentId: string
@@ -1199,30 +1191,26 @@ export const commentsRepo = {
     return commentsCol().countDocuments({ contentType, contentId })
   },
 
-  // Multiple content items ke counts ek saath
-async getCounts(
-  contentType: CommentRecord['contentType'],
-  contentIds: string[]
-): Promise<Record<string, number>> {
-  const docs = await commentsCol()
-    .aggregate([
-      { $match: { contentType, contentId: { $in: contentIds } } },
-      { $group: { _id: '$contentId', count: { $sum: 1 } } },
-    ])
-    .toArray()
+  async getCounts(
+    contentType: CommentRecord['contentType'],
+    contentIds: string[]
+  ): Promise<Record<string, number>> {
+    const docs = await commentsCol()
+      .aggregate([
+        { $match: { contentType, contentId: { $in: contentIds } } },
+        { $group: { _id: '$contentId', count: { $sum: 1 } } },
+      ])
+      .toArray()
 
-  // Sabko 0 se initialize karo
-  const result: Record<string, number> = {}
-  for (const id of contentIds) result[id] = 0
+    const result: Record<string, number> = {}
+    for (const id of contentIds) result[id] = 0
 
-  // Jo counts mile woh fill karo
-  for (const doc of docs) {
-    result[doc._id as string] = doc.count as number
-  }
-  return result
-},
+    for (const doc of docs) {
+      result[doc._id as string] = doc.count as number
+    }
+    return result
+  },
 
-  // Admin ke liye — content ki saari comments delete karo
   async removeByContent(
     contentType: CommentRecord['contentType'],
     contentId: string

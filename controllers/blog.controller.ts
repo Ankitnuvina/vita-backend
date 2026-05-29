@@ -52,26 +52,23 @@ export const uploadBlog: RequestHandler = async (req, res, next) => {
   const mimeType = req.file.mimetype
 
   try {
-    // ── Parse document → always normalise to array ───────────────────────
-   type ParsedBlog = {
-  title: string
-  sections: { heading: string; items: SectionItem[] }[]  // ← string[] tha
-  authorName?: string
-  specialist?: string
-  read?: string
-  date?: string
-  cat?: string
-  imageUrl?: string
-}
+    type ParsedBlog = {
+      title: string
+      sections: { heading: string; items: SectionItem[] }[]
+      authorName?: string
+      specialist?: string
+      read?: string
+      date?: string
+      cat?: string
+      imageUrl?: string
+    }
 
     let parsedBlogs: ParsedBlog[]
 
     if (mimeType === 'application/pdf') {
-      // parsePdf still returns a single object — wrap in array
       const single = await parsePdf(filePath)
       parsedBlogs = [single]
     } else if (mimeType.includes('wordprocessingml')) {
-      // parseDocx now returns an array
       parsedBlogs = await parseDocx(filePath)
     } else if (mimeType.includes('spreadsheetml')) {
       const single = await parseXlsx(filePath)
@@ -86,15 +83,12 @@ export const uploadBlog: RequestHandler = async (req, res, next) => {
       return
     }
 
-    // ── Create one DB record per parsed blog ─────────────────────────────
     const createdBlogs = await Promise.all(
       parsedBlogs.map((parsed, idx) => {
         const palette = PALETTE[idx % PALETTE.length]
         return blogRepo.create({
           title: parsed.title || req.file!.originalname,
           desc: (() => {
-            // Pull the first paragraph or bullet across all sections;
-            // skip heading / table items because they aren't good summaries.
             for (const section of parsed.sections) {
               for (const item of section.items) {
                 if (item.type === 'paragraph' || item.type === 'bullet') {
@@ -121,15 +115,14 @@ export const uploadBlog: RequestHandler = async (req, res, next) => {
       })
     )
 
-    await fs.unlink(filePath).catch(() => {})
+    await fs.unlink(filePath).catch(() => { })
     logger.info(
       `[BlogController] ${createdBlogs.length} blog(s) created from upload: ids=${createdBlogs.map((b) => b.id).join(',')}`
     )
 
-    // Return array always — frontend handles both single and multiple
     res.status(201).json(createdBlogs)
   } catch (err) {
-    await fs.unlink(filePath).catch(() => {})
+    await fs.unlink(filePath).catch(() => { })
     next(err)
   }
 }

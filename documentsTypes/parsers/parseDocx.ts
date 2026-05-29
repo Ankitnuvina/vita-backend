@@ -14,7 +14,6 @@ export interface DocxMeta {
   sections: BlogSection[]
 }
 
-// ── HTML helpers ────────────────────────────────────────────────────────────
 
 function decodeHtml(s: string): string {
   return s
@@ -35,11 +34,6 @@ function brToNewline(s: string): string {
   return s.replace(/<br\s*\/?>/gi, '\n')
 }
 
-// ── Block tokenizer ─────────────────────────────────────────────────────────
-// Mammoth produces flat top-level blocks (h1..h6, p, ul, ol, table).
-// They never nest into each other (except inside table cells / list items),
-// so a non-greedy regex match per tag works reliably.
-
 type BlockTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'p' | 'ul' | 'ol' | 'table'
 
 interface Block {
@@ -57,10 +51,6 @@ function tokenize(html: string): Block[] {
   }
   return out
 }
-
-// ── Image extraction ────────────────────────────────────────────────────────
-// Each image is saved to disk and replaced in the HTML with a placeholder
-// `__IMAGE_<idx>__` that we can match later when slicing per blog.
 
 async function convertToHtmlWithImages(filePath: string): Promise<{
   html: string
@@ -91,7 +81,6 @@ async function convertToHtmlWithImages(filePath: string): Promise<{
   return { html: result.value, imageUrls }
 }
 
-// ── Meta block parsing ──────────────────────────────────────────────────────
 
 const META_KEYWORDS = [
   'Author\\s*Name',
@@ -109,14 +98,6 @@ function looksLikeMetaBlock(text: string): boolean {
   return META_KEYWORDS.some((f) => new RegExp(`${f}\\s*:`, 'i').test(text))
 }
 
-/**
- * The meta block can either come as separate <p>'s OR all inside one <p>
- * with the fields separated by <br /> (newlines) OR even concatenated on
- * a single line (e.g. "Author Name : SophiaRead Time : 15 min...").
- *
- * We normalise by inserting a sentinel before each known keyword so that
- * a split-and-trim cleanly yields one field per segment.
- */
 function parseMetaText(text: string, meta: Partial<DocxMeta>): void {
   let normalized = text
   for (const f of META_KEYWORDS) {
@@ -145,7 +126,6 @@ function parseMetaText(text: string, meta: Partial<DocxMeta>): void {
   }
 }
 
-// ── List / table parsers ────────────────────────────────────────────────────
 
 function parseList(inner: string): SectionItem[] {
   const items: SectionItem[] = []
@@ -179,7 +159,6 @@ function parseTable(inner: string): SectionItem | null {
   return { type: 'table', headers: rows[0], rows: rows.slice(1) }
 }
 
-// ── Build a single blog from its block range ────────────────────────────────
 
 function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
   const meta: Partial<DocxMeta> = {}
@@ -209,7 +188,6 @@ function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
   }
 
   for (const block of blocks) {
-    // Capture blog's cover image from the first image placeholder we see
     if (!imageUrl) {
       const img = resolveFirstImage(block.raw)
       if (img) imageUrl = img
@@ -218,13 +196,11 @@ function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
     if (block.tag === 'p') {
       const text = stripTags(brToNewline(block.inner))
 
-      // Meta block (handles all variants — one <p> per field OR all in one)
       if (looksLikeMetaBlock(text)) {
         parseMetaText(text, meta)
         continue
       }
 
-      // Image-only paragraph → nothing to add as content
       if (!text) continue
 
       currentItems.push({ type: 'paragraph', text })
@@ -236,14 +212,11 @@ function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
       const headingText = stripTags(brToNewline(block.inner))
       if (!headingText) continue
 
-      // h1 / h2 → new top-level section.
-      // Also serves as the blog title (first encountered heading wins).
       if (level <= 2) {
         if (!title) title = headingText
         flush()
         currentHeading = headingText
       } else {
-        // h3+ → sub-heading inside the current section
         currentItems.push({
           type: 'heading',
           level: Math.min(6, level) as 2 | 3 | 4 | 5 | 6,
@@ -268,7 +241,6 @@ function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
 
   flush()
 
-  // Edge case: no headings at all but we still have items → make one Overview
   if (!hasFlushedAtLeastOnce && sections.length === 0 && currentItems.length === 0) {
     sections.push({ heading: 'Overview', items: [] })
   }
@@ -286,11 +258,6 @@ function buildBlog(blocks: Block[], imageUrls: string[]): DocxMeta {
     sections,
   }
 }
-
-// ── Boundary detection ──────────────────────────────────────────────────────
-// A new blog starts at every paragraph that contains "Author Name :".
-// We also pull the immediately preceding image-only paragraph(s) into the
-// next blog so that each blog keeps its own cover image.
 
 function findBlogStarts(blocks: Block[]): number[] {
   const boundaries: number[] = []
@@ -330,14 +297,7 @@ function findBlogStarts(blocks: Block[]): number[] {
   return starts
 }
 
-// ── Main export ─────────────────────────────────────────────────────────────
 
-/**
- * Parse a .docx file that may contain ONE or MULTIPLE blog posts.
- * Each blog is separated by a paragraph beginning "Author Name : ...".
- * Each blog can carry its own cover image and preserves the document's
- * heading / paragraph / bullet / table structure.
- */
 export async function parseDocx(filePath: string): Promise<DocxMeta[]> {
   const { html, imageUrls } = await convertToHtmlWithImages(filePath)
   const blocks = tokenize(html)
@@ -346,7 +306,6 @@ export async function parseDocx(filePath: string): Promise<DocxMeta[]> {
 
   const starts = findBlogStarts(blocks)
 
-  // Single blog (no explicit author boundary found)
   if (starts.length === 0) {
     return [buildBlog(blocks, imageUrls)]
   }

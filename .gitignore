@@ -5,7 +5,6 @@ dist
 !.env.example
 *.log
 
-# SQLite database files
 db/*.sqlite
 db/*.sqlite-journal
 db/*.sqlite-wal
