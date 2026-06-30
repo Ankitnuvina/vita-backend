@@ -11,6 +11,10 @@ import { authRouter } from './routes/auth.routes'
 import { contentRouter } from './routes/content.routes'
 import { blogRouter } from './routes/blog.routes'
 import { commentsRouter } from './routes/comments.routes'
+import { chatRouter } from './routes/chat.routes'
+
+import { userRouter } from './routes/user.routes'
+
 import path from 'path'
 
 const app = express()
@@ -42,8 +46,12 @@ app.use('/uploads', (_req, res, next) => {
   })
 )
 
+app.use('/chat', chatRouter)
+
 app.get('/api/health', (_req, res) => { res.json({ status: 'ok', env: config.nodeEnv })})
 app.use('/api/auth', authRouter)
+
+app.use('/api/user', userRouter)
 
 app.use('/api/comments', commentsRouter)
 app.use('/api/admin', adminRouter)

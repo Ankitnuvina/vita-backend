@@ -39,4 +39,7 @@ router.post('/logout', authController.logout)
 router.post('/refresh', authController.refresh)
 router.get('/me', requireAuth, authController.me)
 
+router.get('/verify-email', authController.verifyEmail)
+router.post('/resend-verification', authController.resendVerification)
+
 export { router as authRouter }

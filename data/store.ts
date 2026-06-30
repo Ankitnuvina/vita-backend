@@ -7,9 +7,16 @@ import type { SectionItem } from '@/documentsTypes/parsers/sectionTypes'
 export interface UserRecord {
   userId: string
   username: string
+  email: string
   role: UserRole
   passwordHash: string
+  avatarUrl?: string
+  isVerified: boolean
+  isDeleted: boolean
+  verificationToken?: string
+  verificationTokenExpiry?: Date
   createdAt: string
+  updatedAt?: string
 }
 
 interface ArticleDoc {
@@ -46,7 +53,6 @@ interface PodcastDoc {
   guest: string
   duration: string
   date: string
-  // imageUrl: string
   videoUrl: string
   createdAt: Date
 }
@@ -84,14 +90,20 @@ interface PlanDoc {
 }
 
 interface UserDoc {
-  /** Equals `userId` (e.g. "admin-1", "user-3"). */
   _id: string
   username: string
-  /** Lower-cased copy used by the case-insensitive unique index. */
   usernameLower: string
+  email: string
+  emailLower: string
   role: UserRole
   passwordHash: string
+  avatarUrl?: string
+  isVerified: boolean
+  isDeleted: boolean
+  verificationToken?: string
+  verificationTokenExpiry?: Date
   createdAt: Date
+  updatedAt?: Date
 }
 
 interface AppMetaDoc {
@@ -125,6 +137,17 @@ interface CommentDoc {
   text: string
   createdAt: Date
   updatedAt?: Date
+  avatarUrl?: string
+}
+
+interface ChatDoc {
+  _id: string
+  userId: string
+  sessionId: string
+  question: string
+  answer: string
+  createdAt: Date
+  pinnedAt?: Date | null
 }
 
 interface BlogDoc {
@@ -181,6 +204,10 @@ function likesCol() {
   return getDb().collection<LikeDoc>(Collections.likes)
 }
 
+function chatsCol() {
+  return getDb().collection<ChatDoc>(Collections.chats)
+}
+
 function blogsCol(): Collection<BlogDoc> {
   return getDb().collection<BlogDoc>('blogs')
 }
@@ -223,7 +250,6 @@ function docToPodcast(d: PodcastDoc): Podcast {
     guest: d.guest,
     duration: d.duration,
     date: d.date,
-    // imageUrl: d.imageUrl,
     videoUrl: d.videoUrl,
   }
 }
@@ -267,9 +293,16 @@ function docToUser(d: UserDoc): UserRecord {
   return {
     userId: d._id,
     username: d.username,
+    email: d.email,
     role: d.role,
     passwordHash: d.passwordHash,
+    avatarUrl: d.avatarUrl,
+    isVerified: d.isVerified,
+    isDeleted: d.isDeleted,
+    verificationToken: d.verificationToken,
+    verificationTokenExpiry: d.verificationTokenExpiry,
     createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+    updatedAt: d.updatedAt instanceof Date ? d.updatedAt.toISOString() : undefined,
   }
 }
 
@@ -323,6 +356,8 @@ function docToComment(d: CommentDoc & { userName?: string }): CommentRecord {
     text: d.text,
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt?.toISOString(),
+    avatarUrl: d.avatarUrl
+
   }
 }
 
@@ -351,6 +386,23 @@ export interface CommentRecord {
   text: string
   createdAt: string
   updatedAt?: string
+  avatarUrl?: string
+}
+
+export interface ChatRecord {
+  id: string
+  userId: string
+  sessionId: string
+  question: string
+  answer: string
+  createdAt: string
+}
+export interface ChatSession {
+  sessionId: string
+  title: string
+  messages: { id: string; question: string; answer: string; createdAt: string }[]
+  createdAt: string
+  pinnedAt?: string | null
 }
 
 export interface BlogRecord {
@@ -573,8 +625,8 @@ export const expertRepo = {
         {
           $lookup: {
             from: 'articles',
-            localField: 'name', 
-            foreignField: 'author', 
+            localField: 'name',
+            foreignField: 'author',
             as: 'articles',
           },
         },
@@ -585,14 +637,14 @@ export const expertRepo = {
         },
         {
           $project: {
-            articles: 0, 
+            articles: 0,
           },
         },
         { $sort: { _id: -1 } },
       ])
       .toArray()
 
-   return docs.map((d) => docToExpert(d as ExpertDoc & { articleCount?: number }))
+    return docs.map((d) => docToExpert(d as ExpertDoc & { articleCount?: number }))
   },
 
   // byId mein bhi same
@@ -724,23 +776,70 @@ export const planRepo = {
 /* -------------------------------------------------------------------------- */
 
 export const userRepo = {
+
   async findByUsername(username: string): Promise<UserRecord | undefined> {
     const doc = await usersCol().findOne({ usernameLower: username.toLowerCase() })
     return doc ? docToUser(doc) : undefined
   },
+
   async findByUserId(userId: string): Promise<UserRecord | undefined> {
     const doc = await usersCol().findOne({ _id: userId })
     return doc ? docToUser(doc) : undefined
   },
+
   async exists(username: string): Promise<boolean> {
     return (await this.findByUsername(username)) !== undefined
   },
-  async create(input: { username: string; role: UserRole; passwordHash: string }): Promise<UserRecord> {
+
+  async findByEmail(email: string): Promise<UserRecord | undefined> {
+    const doc = await usersCol().findOne({ emailLower: email.toLowerCase() })
+    return doc ? docToUser(doc) : undefined
+  },
+
+  async findByVerificationToken(token: string): Promise<UserRecord | undefined> {
+    const doc = await usersCol().findOne({ verificationToken: token })
+    return doc ? docToUser(doc) : undefined
+  },
+
+  async existsByEmail(email: string): Promise<boolean> {
+    return (await this.findByEmail(email)) !== undefined
+  },
+
+
+  // async create(input: { username: string; role: UserRole; passwordHash: string }): Promise<UserRecord> {
+  //   const idPrefix = input.role === 'admin' ? 'admin' : 'user'
+  //   const sameRoleCount = await usersCol().countDocuments({ role: input.role })
+  //   const next = sameRoleCount + 1
+  //   let userId = `${idPrefix}-${next}`
+
+  //   while (await usersCol().findOne({ _id: userId })) {
+  //     userId = `${idPrefix}-${next + Math.floor(Math.random() * 1_000_000)}`
+  //   }
+
+  //   const doc: UserDoc = {
+  //     _id: userId,
+  //     username: input.username,
+  //     usernameLower: input.username.toLowerCase(),
+  //     role: input.role,
+  //     passwordHash: input.passwordHash,
+  //     createdAt: new Date(),
+  //   }
+  //   await usersCol().insertOne(doc)
+  //   return docToUser(doc)
+  // },
+
+  async create(input: {
+    username: string
+    email: string                      // ADD
+    role: UserRole
+    passwordHash: string
+    verificationToken: string          // ADD
+    verificationTokenExpiry: Date      // ADD
+  }): Promise<UserRecord> {
     const idPrefix = input.role === 'admin' ? 'admin' : 'user'
     const sameRoleCount = await usersCol().countDocuments({ role: input.role })
     const next = sameRoleCount + 1
     let userId = `${idPrefix}-${next}`
-
     while (await usersCol().findOne({ _id: userId })) {
       userId = `${idPrefix}-${next + Math.floor(Math.random() * 1_000_000)}`
     }
@@ -749,13 +848,72 @@ export const userRepo = {
       _id: userId,
       username: input.username,
       usernameLower: input.username.toLowerCase(),
+      email: input.email,
+      emailLower: input.email.toLowerCase(),
       role: input.role,
       passwordHash: input.passwordHash,
+      isVerified: false,
+      isDeleted: false,
+      verificationToken: input.verificationToken,
+      verificationTokenExpiry: input.verificationTokenExpiry,
       createdAt: new Date(),
     }
     await usersCol().insertOne(doc)
     return docToUser(doc)
   },
+
+  async verifyUser(userId: string): Promise<void> {
+    await usersCol().updateOne(
+      { _id: userId },
+      {
+        $set: { isVerified: true, updatedAt: new Date() },
+        $unset: { verificationToken: '', verificationTokenExpiry: '' },
+      }
+    )
+  },
+
+  async updateVerificationToken(
+    userId: string,
+    token: string,
+    expiry: Date
+  ): Promise<void> {
+    await usersCol().updateOne(
+      { _id: userId },
+      { $set: { verificationToken: token, verificationTokenExpiry: expiry, updatedAt: new Date() } }
+    )
+  },
+
+  async updateAvatar(userId: string, avatarUrl: string): Promise<void> {
+    await usersCol().updateOne(
+      { _id: userId },
+      { $set: { avatarUrl, updatedAt: new Date() } }
+    )
+  },
+
+  async updateProfile(
+    userId: string,
+    data: { username?: string; email?: string }
+  ): Promise<UserRecord | undefined> {
+    const updateFields: Partial<UserDoc> = { updatedAt: new Date() }
+    if (data.username) {
+      updateFields.username = data.username
+      updateFields.usernameLower = data.username.toLowerCase()
+    }
+    if (data.email) {
+      updateFields.email = data.email
+      updateFields.emailLower = data.email.toLowerCase()
+    }
+    await usersCol().updateOne({ _id: userId }, { $set: updateFields })
+    return this.findByUserId(userId)
+  },
+
+  async softDelete(userId: string): Promise<void> {
+    await usersCol().updateOne(
+      { _id: userId },
+      { $set: { isDeleted: true, updatedAt: new Date() } }
+    )
+  },
+
   async count(role?: UserRole): Promise<number> {
     if (role) return usersCol().countDocuments({ role })
     return usersCol().countDocuments({})
@@ -1089,6 +1247,7 @@ export const commentsRepo = {
     contentType: CommentRecord['contentType'],
     contentId: string,
     text: string
+
   ): Promise<CommentRecord> {
     const { ObjectId } = await import('mongodb')
     const _id = new ObjectId().toHexString()
@@ -1131,19 +1290,57 @@ export const commentsRepo = {
     ])
 
     const uniqueUserIds = Array.from(new Set(docs.map((d) => d.userId)))
-    const userMap = new Map<string, string>()
+    // const userMap = new Map<string, string>()
+    const userMap = new Map<
+  string,
+  {
+    username: string
+    avatarUrl?: string
+  }
+>()
     if (uniqueUserIds.length > 0) {
+      // const users = await getDb()
+      //   .collection<{ _id: string; username: string; avatarUrl?: string }>(Collections.users)
+      //   .find({ _id: { $in: uniqueUserIds } }, { projection: { username: 1 } })
+      //   .toArray()
       const users = await getDb()
-        .collection<{ _id: string; username: string }>(Collections.users)
-        .find({ _id: { $in: uniqueUserIds } }, { projection: { username: 1 } })
+        .collection<{
+          _id: string
+          username: string
+          avatarUrl?: string
+        }>(Collections.users)
+        .find(
+          { _id: { $in: uniqueUserIds } },
+          {
+            projection: {
+              username: 1,
+              avatarUrl: 1,
+            },
+          }
+        )
         .toArray()
-      for (const u of users) userMap.set(u._id, u.username)
+      // for (const u of users) userMap.set(u._id, u.username,)
+      for (const u of users) {
+        userMap.set(u._id, {
+          username: u.username,
+          avatarUrl: u.avatarUrl,
+        })
+      }
     }
 
     return {
-      comments: docs.map((d) =>
-        docToComment({ ...d, userName: userMap.get(d.userId) ?? 'User' })
-      ),
+      // comments: docs.map((d) =>
+      //   docToComment({ ...d, userName: userMap.get(d.userId) ?? 'User' })
+      // ),
+      comments: docs.map((d) => {
+        const user = userMap.get(d.userId)
+
+       return docToComment({
+  ...d,
+  userName: user?.username ?? 'User',
+  avatarUrl: user?.avatarUrl,
+})
+      }),
       total,
     }
   },
@@ -1217,5 +1414,125 @@ export const commentsRepo = {
   ): Promise<number> {
     const result = await commentsCol().deleteMany({ contentType, contentId })
     return result.deletedCount
+  },
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Chats repo                                                                 */
+/* -------------------------------------------------------------------------- */
+export const chatRepo = {
+  async add(userId: string, sessionId: string, question: string, answer: string): Promise<ChatRecord> {
+    const { ObjectId } = await import('mongodb')
+    const _id = new ObjectId().toHexString()
+    const doc: ChatDoc = {
+      _id,
+      userId,
+      sessionId,
+      question: question.trim(),
+      answer: answer.trim(),
+      createdAt: new Date(),
+    }
+    await chatsCol().insertOne(doc)
+    return {
+      id: doc._id,
+      userId: doc.userId,
+      sessionId: doc.sessionId,
+      question: doc.question,
+      answer: doc.answer,
+      createdAt: doc.createdAt.toISOString(),
+    }
+  },
+
+  // getAll ko sessions grouped return karne wala banao
+  // async getAll(userId: string): Promise<ChatSession[]> {
+  //   const docs = await chatsCol()
+  //     .find({ userId })
+  //     .sort({ createdAt: 1 })
+  //     .toArray()
+
+  //   const sessionMap = new Map<string, ChatDoc[]>()
+  //   for (const doc of docs) {
+  //     const sid = doc.sessionId ?? doc._id
+  //     if (!sessionMap.has(sid)) sessionMap.set(sid, [])
+  //     sessionMap.get(sid)!.push(doc)
+  //   }
+
+  //   const sessions: ChatSession[] = []
+  //   for (const [sessionId, msgs] of sessionMap) {
+  //     const latest = msgs[msgs.length - 1]
+  //     sessions.push({
+  //       sessionId,
+  //       title: msgs[0].question,
+  //       messages: msgs.map((d) => ({
+  //         id: d._id,
+  //         question: d.question,
+  //         answer: d.answer,
+  //         createdAt: d.createdAt.toISOString(),
+  //       })),
+  //       createdAt: latest.createdAt.toISOString(),
+  //     })
+  //   }
+
+  //   return sessions.sort(
+  //     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  //   )
+  // },
+  async pinSession(userId: string, sessionId: string, pin: boolean): Promise<void> {
+    await chatsCol().updateMany(
+      { userId, sessionId },
+      { $set: { pinnedAt: pin ? new Date() : null } }
+    )
+  },
+
+  // getAll mein pinnedAt include karo
+  async getAll(userId: string): Promise<ChatSession[]> {
+    const docs = await chatsCol()
+      .find({ userId })
+      .sort({ createdAt: 1 })
+      .toArray()
+
+    const sessionMap = new Map<string, ChatDoc[]>()
+    for (const doc of docs) {
+      const sid = doc.sessionId ?? doc._id
+      if (!sessionMap.has(sid)) sessionMap.set(sid, [])
+      sessionMap.get(sid)!.push(doc)
+    }
+
+    const sessions: ChatSession[] = []
+    for (const [sessionId, msgs] of sessionMap) {
+      const latest = msgs[msgs.length - 1]
+      sessions.push({
+        sessionId,
+        title: msgs[0].question,
+        pinnedAt: msgs[0].pinnedAt?.toISOString() ?? null,   // ADD
+        messages: msgs.map((d) => ({
+          id: d._id,
+          question: d.question,
+          answer: d.answer,
+          createdAt: d.createdAt.toISOString(),
+        })),
+        createdAt: latest.createdAt.toISOString(),
+      })
+    }
+
+    return sessions.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+  },
+
+  async renameSession(userId: string, sessionId: string, newTitle: string): Promise<void> {
+    const firstDoc = await chatsCol().findOne(
+      { userId, sessionId },
+      { sort: { createdAt: 1 } }
+    )
+    if (!firstDoc) return
+    await chatsCol().updateOne(
+      { _id: firstDoc._id },
+      { $set: { question: newTitle.trim() } }
+    )
+  },
+
+  async deleteSession(userId: string, sessionId: string): Promise<void> {
+    await chatsCol().deleteMany({ userId, sessionId })
   },
 }

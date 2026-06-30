@@ -7,20 +7,29 @@ let cachedDb: Db | null = null
 
 
 export async function connectDb(): Promise<Db> {
-  if (cachedDb) return cachedDb
+  try {
+    if (cachedDb) return cachedDb
 
-  client = new MongoClient(config.mongoUri, {
-    maxPoolSize: 20,
-    serverSelectionTimeoutMS: 10_000,
-  })
+    logger.info(`Connecting to MongoDB...`)
 
-  await client.connect()
-  cachedDb = client.db(config.mongoDb)
-  logger.debug(`[db] Connected to MongoDB (db=${config.mongoDb})`)
+    client = new MongoClient(config.mongoUri, {
+      maxPoolSize: 20,
+      serverSelectionTimeoutMS: 10000,
+    })
 
-  await ensureIndexes(cachedDb)
+    await client.connect()
 
-  return cachedDb
+    logger.info(`MongoDB connected successfully`)
+
+    cachedDb = client.db(config.mongoDb)
+
+    await ensureIndexes(cachedDb)
+
+    return cachedDb
+  } catch (error) {
+    logger.error('Mongo connection failed', error)
+    throw error
+  }
 }
 
 async function ensureIndexes(db: Db): Promise<void> {
@@ -33,6 +42,10 @@ async function ensureIndexes(db: Db): Promise<void> {
     db.collection(Collections.likes).createIndexes([
       { key: { contentType: 1, contentId: 1 } },
       { key: { userId: 1 } },
+    ]),
+
+    db.collection(Collections.chats).createIndexes([
+      { key: { userId: 1, createdAt: -1 } },
     ]),
   ])
 
@@ -70,6 +83,7 @@ export const Collections = {
   blogs: 'blogs',
   likes: 'likes',
   comments: 'comments',
+  chats: 'chats',
 } as const
 
 export type CounterName = 'articles' | 'podcasts' | 'experts' | 'tips' | 'blogs'

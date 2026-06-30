@@ -39,4 +39,13 @@ export const config = {
   adminInviteCode: required('ADMIN_INVITE_CODE'),
   mongoUri: optional('MONGO_URI', 'mongodb://localhost:27017'),
   mongoDb: optional('MONGO_DB', 'vitalize'),
+
+  smtpHost: process.env.SMTP_HOST ?? '',
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpUser: process.env.SMTP_USER ?? '',
+  smtpPassword: process.env.SMTP_PASSWORD ?? '',
+  smtpSender: process.env.SMTP_SENDER ?? '',
+  smtpReplyTo: process.env.SMTP_REPLYTO ?? '',
+  verificationTokenExpiryHours: Number(process.env.VERIFICATION_TOKEN_EXPIRATION_HOURS ?? 24),
+  
 } as const

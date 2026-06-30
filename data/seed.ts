@@ -249,7 +249,7 @@ export const seedExperts: Expert[] = [
 export const seedTips: WellnessTip[] = [
   {
     id: 1,
-    icon: '🌿',
+    icon: '❤',
     colors: { bg: '#F0F7F2', border: '#D6EDE0' },
     title: 'Gut Health Today',
     text: 'Aim for 30 distinct plant foods this week. Microbiome diversity is the #1 modifiable health factor.',

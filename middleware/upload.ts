@@ -8,9 +8,20 @@ const UPLOAD_ROOT = path.join(process.cwd(), 'uploads')
 const IMAGE_DIR = path.join(UPLOAD_ROOT, 'uploadsArticlesImages')
 const VIDEO_DIR = path.join(UPLOAD_ROOT, 'uploadsPodcastsVideos')
 
+const AVATAR_DIR = path.join(UPLOAD_ROOT, 'avatars')
+
+for (const dir of [UPLOAD_ROOT, IMAGE_DIR, VIDEO_DIR, AVATAR_DIR]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+}
+
 for (const dir of [UPLOAD_ROOT, IMAGE_DIR, VIDEO_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
+  filename: (_req, file, cb) => cb(null, buildFilename(file.originalname)),
+})
 
 const imageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, IMAGE_DIR),
@@ -64,6 +75,16 @@ export const uploadVideo = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     VIDEO_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error(`Only video files allowed`))
+  },
+})
+
+export const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },   // 5MB
+  fileFilter: (_req, file, cb) => {
+    IMAGE_TYPES.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Only image files allowed for avatar'))
   },
 })
 
